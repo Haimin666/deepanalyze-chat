@@ -1,8 +1,9 @@
 /**
  * Zustand 状态管理 Store
+ * 支持按用户隔离存储
  */
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 // 用户类型
 export interface User {
@@ -50,12 +51,19 @@ interface SessionState {
   currentSessionId: string | null;
   sessions: ChatSession[];
   hasMessages: boolean;
+  // 用户隔离相关
+  currentUserId: string | null;
+  setCurrentUser: (userId: string | null) => void;
+  // 会话操作
   setCurrentSession: (id: string) => void;
   createNewSession: () => string;
   deleteSession: (id: string) => void;
   saveCurrentSession: (title: string, messageCount: number, preview?: string, messages?: StoredMessage[]) => void;
   getSessionMessages: (id: string) => StoredMessage[] | undefined;
   setHasMessages: (has: boolean) => void;
+  // 从后端加载会话
+  loadSessionsFromBackend: (sessions: ChatSession[]) => void;
+  clearAllSessions: () => void;
 }
 
 // 认证 Store
@@ -112,13 +120,32 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// 会话 Store
+// 按用户隔离的存储 key
+const getUserStorageKey = (userId: string | null) => {
+  return userId ? `session-storage-${userId}` : "session-storage-guest";
+};
+
+// 会话 Store - 按用户隔离
 export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
       currentSessionId: null,
       sessions: [],
       hasMessages: false,
+      currentUserId: null,
+
+      setCurrentUser: (userId) => {
+        const currentUserId = get().currentUserId;
+        // 如果用户变化，清空当前会话数据
+        if (currentUserId !== userId) {
+          set({
+            currentUserId: userId,
+            currentSessionId: null,
+            sessions: [],
+            hasMessages: false,
+          });
+        }
+      },
 
       setCurrentSession: (id) => {
         set({ currentSessionId: id });
@@ -168,12 +195,42 @@ export const useSessionStore = create<SessionState>()(
       setHasMessages: (has) => {
         set({ hasMessages: has });
       },
+
+      loadSessionsFromBackend: (backendSessions) => {
+        // 从后端加载会话列表，合并本地消息
+        const localSessions = get().sessions;
+        const localSessionMap = new Map(
+          localSessions.map(s => [s.id, s])
+        );
+
+        // 合并：后端会话 + 本地消息
+        const mergedSessions = backendSessions.map(backendSession => {
+          const localSession = localSessionMap.get(backendSession.id);
+          return {
+            ...backendSession,
+            // 保留本地的消息数据
+            messages: localSession?.messages || [],
+          };
+        });
+
+        set({ sessions: mergedSessions });
+      },
+
+      clearAllSessions: () => {
+        set({
+          currentSessionId: null,
+          sessions: [],
+          hasMessages: false,
+        });
+      },
     }),
     {
-      name: "session-storage",
+      name: "session-storage", // 基础名称，实际会根据用户动态变化
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         currentSessionId: state.currentSessionId,
         sessions: state.sessions,
+        currentUserId: state.currentUserId,
       }),
     }
   )

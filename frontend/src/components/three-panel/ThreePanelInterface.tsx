@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
@@ -22,6 +21,7 @@ import {
   useAuthStore,
   useSessionStore,
   type StoredMessage,
+  type ChatSession,
 } from "@/lib/store";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { AdminPage } from "@/components/auth/AdminPage";
@@ -53,6 +53,7 @@ export function ThreePanelInterface() {
 
   // Auth 状态
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const currentUser = useAuthStore((state) => state.user);
   const checkTimeout = useAuthStore((state) => state.checkTimeout);
   const updateActivity = useAuthStore((state) => state.updateActivity);
 
@@ -66,6 +67,9 @@ export function ThreePanelInterface() {
     saveCurrentSession,
     getSessionMessages,
     hasMessages,
+    setCurrentUser,
+    loadSessionsFromBackend,
+    clearAllSessions,
   } = useSessionStore();
 
   // Session 管理 - 获取初始 sessionId
@@ -84,9 +88,25 @@ export function ThreePanelInterface() {
   // 主题管理
   const { isDarkMode, toggleTheme } = useTheme();
 
+  // 用户变化时重新加载数据
+  const prevUserIdRef = useRef<string | null>(null);
+
+  // 从后端加载用户的会话列表
+  const loadUserSessions = useCallback(async (userId: string) => {
+    try {
+      const response = await authFetch(API_URLS.SESSIONS);
+      if (response.ok) {
+        const backendSessions = await response.json();
+        loadSessionsFromBackend(backendSessions);
+      }
+    } catch (error) {
+      console.error("Failed to load sessions from backend:", error);
+    }
+  }, [loadSessionsFromBackend]);
+
   // 检查登录状态和超时
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && currentUser) {
       const isTimeout = checkTimeout();
       if (isTimeout) {
         setView("login");
@@ -96,11 +116,26 @@ export function ThreePanelInterface() {
         });
       } else {
         setView("main");
+        
+        // 检查用户是否变化
+        if (prevUserIdRef.current !== currentUser.id) {
+          // 用户变化，清空旧数据并加载新用户数据
+          setCurrentUser(currentUser.id);
+          clearAllSessions();
+          loadUserSessions(currentUser.id);
+          prevUserIdRef.current = currentUser.id;
+        }
       }
     } else {
       setView("login");
+      // 清空会话数据
+      if (prevUserIdRef.current) {
+        setCurrentUser(null);
+        clearAllSessions();
+        prevUserIdRef.current = null;
+      }
     }
-  }, [isAuthenticated, checkTimeout, toast]);
+  }, [isAuthenticated, currentUser, checkTimeout, toast, setCurrentUser, clearAllSessions, loadUserSessions]);
 
   // 活动检测 - 更新最后活动时间
   useEffect(() => {
