@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { API_URLS } from "@/lib/config";
+import { API_URLS, authFetch } from "@/lib/config";
 import {
   useAuthStore,
   useSessionStore,
@@ -321,7 +321,7 @@ export function ThreePanelInterface() {
     async (id: string) => {
       try {
         // 调用后端 API 删除会话
-        const response = await fetch(`${API_URLS.SESSIONS}/${id}`, {
+        const response = await authFetch(`${API_URLS.SESSIONS}/${id}`, {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
@@ -372,7 +372,7 @@ export function ThreePanelInterface() {
 
       toast({ description: "正在生成 PDF 报告..." });
 
-      const res = await fetch(API_URLS.EXPORT_REPORT, {
+      const res = await authFetch(API_URLS.EXPORT_REPORT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

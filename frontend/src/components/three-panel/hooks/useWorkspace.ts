@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { API_URLS, API_CONFIG } from "@/lib/config";
+import { API_URLS, API_CONFIG, authFetch } from "@/lib/config";
 import { WorkspaceFile, WorkspaceNode, ArborNode } from "../types";
 
 /**
@@ -24,7 +24,7 @@ export function useWorkspace(sessionId: string) {
   const loadWorkspaceFiles = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_URLS.WORKSPACE_FILES}?session_id=${sessionId}`
       );
       if (response.ok) {
@@ -40,7 +40,7 @@ export function useWorkspace(sessionId: string) {
   const loadWorkspaceTree = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${API_URLS.WORKSPACE_TREE}?session_id=${sessionId}`
       );
       if (res.ok) {
@@ -89,7 +89,7 @@ export function useWorkspace(sessionId: string) {
       const url = `${API_URLS.WORKSPACE_DELETE_FILE}?path=${encodeURIComponent(
         p
       )}&session_id=${encodeURIComponent(sessionId)}`;
-      const res = await fetch(url, { method: "DELETE" });
+      const res = await authFetch(url, { method: "DELETE" });
       if (res.ok) {
         await loadWorkspaceTree();
         await loadWorkspaceFiles();
@@ -105,7 +105,7 @@ export function useWorkspace(sessionId: string) {
       const url = `${API_URLS.WORKSPACE_DELETE_DIR}?path=${encodeURIComponent(
         p
       )}&recursive=true&session_id=${encodeURIComponent(sessionId)}`;
-      const res = await fetch(url, { method: "DELETE" });
+      const res = await authFetch(url, { method: "DELETE" });
       if (res.ok) {
         await loadWorkspaceTree();
         await loadWorkspaceFiles();
@@ -124,7 +124,7 @@ export function useWorkspace(sessionId: string) {
         )}&dst_dir=${encodeURIComponent(dstDir)}&session_id=${encodeURIComponent(
           sessionId
         )}`;
-      const res = await fetch(url, { method: "POST" });
+      const res = await authFetch(url, { method: "POST" });
       if (res.ok) {
         await loadWorkspaceTree();
         await loadWorkspaceFiles();
@@ -165,7 +165,7 @@ export function useWorkspace(sessionId: string) {
       
       console.log("[Upload] Starting upload to:", url);
       
-      const response = await fetch(url, { method: "POST", body: form });
+      const response = await authFetch(url, { method: "POST", body: form });
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -192,7 +192,7 @@ export function useWorkspace(sessionId: string) {
   const clearWorkspace = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const response = await fetch(
+      const response = await authFetch(
         `${API_URLS.WORKSPACE_CLEAR}?session_id=${sessionId}`,
         {
           method: "DELETE",

@@ -32,11 +32,12 @@ class ChatService:
         self,
         messages: List[dict],
         workspace: List[str],
-        session_id: str = "default"
+        session_id: str = "default",
+        user_id: str = "default"
     ) -> Generator[str, None, None]:
         """流式生成AI回复"""
         original_cwd = os.getcwd()
-        WORKSPACE_DIR = self.workspace_service.get_session_workspace(session_id)
+        WORKSPACE_DIR = self.workspace_service.get_session_workspace(session_id, user_id)
         os.makedirs(WORKSPACE_DIR, exist_ok=True)
 
         GENERATED_DIR = os.path.join(WORKSPACE_DIR, "generated")
@@ -115,7 +116,7 @@ class ChatService:
 
                     # 构建执行结果
                     exe_str = f"\n<Execute>\n```\n{exe_output}\n```\n</Execute>\n"
-                    file_block = self._build_file_block(artifact_paths, WORKSPACE_DIR, session_id)
+                    file_block = self._build_file_block(artifact_paths, WORKSPACE_DIR, user_id, session_id)
                     full_execution_block = exe_str + file_block
 
                     assistant_reply += full_execution_block
@@ -200,6 +201,7 @@ class ChatService:
         self,
         artifact_paths: List[Path],
         workspace_dir: str,
+        user_id: str,
         session_id: str
     ) -> str:
         """构建文件信息块"""
@@ -213,7 +215,7 @@ class ChatService:
             except Exception:
                 rel = Path(p).name
 
-            url = self.workspace_service.build_download_url(f"{session_id}/{rel}")
+            url = self.workspace_service.build_download_url(f"{user_id}/{session_id}/{rel}")
             name = Path(p).name
             lines.append(f"- [{name}]({url})")
 
@@ -225,7 +227,7 @@ class ChatService:
 
 
 class ReportService:
-    """报告导出服务 - 生成 PDF 报告"""
+    """报告导出服务 - 生成 PDF 报告 (md->html->pdf)"""
 
     # 缓存字体路径
     _cached_font_path: Optional[str] = None
@@ -430,26 +432,104 @@ class ReportService:
         print("WARNING: No Chinese font found, PDF may have encoding issues")
         return None
 
-    def _save_pdf(self, md_text: str, base_name: str, workspace_dir: str) -> Optional[Path]:
-        """使用 pypandoc + xelatex 生成 PDF"""
-        Path(workspace_dir).mkdir(parents=True, exist_ok=True)
-        pdf_path = uniquify_path(Path(workspace_dir) / f"{base_name}.pdf")
+    def _save_pdf_via_html(
+        self, 
+        md_text: str, 
+        base_name: str, 
+        workspace_dir: str,
+        export_dir: str
+    ) -> Optional[Path]:
+        """
+        使用 md->html->pdf 方式生成 PDF
+        参考 /home/z/my-project/upload/utils.py 中的 save_pdf_report 函数
+        """
         try:
-            import pypandoc
-            pypandoc.convert_text(
-                md_text,
-                "pdf",
-                format="md",
-                outputfile=str(pdf_path),
-                extra_args=[
-                    "--standalone",
-                    "--pdf-engine=xelatex",
-                ],
-            )
-            return pdf_path
-        except Exception as e:
-            print(f"PDF generation failed: {e}")
+            import markdown
+        except ImportError:
+            print("Warning: 'markdown' library not installed. PDF generation skipped.")
             return None
+
+        Path(export_dir).mkdir(parents=True, exist_ok=True)
+        pdf_path = uniquify_path(Path(export_dir) / f"{base_name}.pdf")
+        
+        # --- 1. 扫描所有可用图片 ---
+        image_extensions = {'.png', '.jpg', '.jpeg', '.svg', '.bmp', '.gif', '.webp'}
+        all_images = {}  # {filename: path}
+        try:
+            for f in Path(export_dir).iterdir():
+                if f.is_file() and f.suffix.lower() in image_extensions:
+                    all_images[f.name] = f
+        except Exception:
+            pass
+
+        # --- 2. 处理正文中的图片链接 ---
+        pdf_md = md_text
+        referenced_images = set()
+
+        for fname, img_path in all_images.items():
+            escaped_fname = re.escape(fname)
+            # 查找 MD 中是否引用了此图片 (e.g. ![...](filename) or [..](filename))
+            pattern = r"(?:!\[.*?\]|\[.*?\])\((?:.*?/)?(?:" + escaped_fname + r")\)"
+            
+            if re.search(pattern, pdf_md):
+                referenced_images.add(fname)
+                # 替换为 file:// 绝对路径
+                abs_path = img_path.resolve().as_posix()
+                # 替换引用
+                replace_pattern = r"\((?:.*?/)?(?:" + escaped_fname + r")\)"
+                pdf_md = re.sub(replace_pattern, f"(file://{abs_path})", pdf_md)
+
+        # --- 3. 追加"孤儿"图片 (Orphan Images) ---
+        # 模型生成了但没写进报告的图片
+        orphan_images = [img for name, img in all_images.items() if name not in referenced_images]
+        
+        if orphan_images:
+            pdf_md += "\n\n\\newpage\n\n# 补充图表 (Supplementary Figures)\n\n"
+            pdf_md += "以下是分析过程中生成但未在正文中引用的图表：\n\n"
+            for img_path in sorted(orphan_images):
+                abs_path = img_path.resolve().as_posix()
+                pdf_md += f"### {img_path.name}\n"
+                pdf_md += f"![{img_path.name}](file://{abs_path})\n\n"
+
+        # --- 4. 转换为 HTML ---
+        html_body = markdown.markdown(
+            pdf_md, 
+            extensions=['fenced_code', 'tables', 'nl2br', 'sane_lists']
+        )
+
+        # --- 5. 生成 PDF ---
+        # Strategy 1: WeasyPrint
+        try:
+            from weasyprint import HTML, CSS
+            css = CSS(string="""
+                @page { margin: 2cm; }
+                body { font-family: "SimHei", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; font-size: 11pt; line-height: 1.6; }
+                img { max-width: 95%; height: auto; display: block; margin: 20px auto; border: 1px solid #ddd; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); }
+                pre { background: #f8f9fa; padding: 10px; border: 1px solid #eee; white-space: pre-wrap; font-family: monospace; }
+                h1, h2, h3 { color: #333; margin-top: 1.2em; }
+                table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+                th, td { border: 1px solid #ddd; padding: 8px; }
+                th { background-color: #f2f2f2; }
+            """)
+            HTML(string=html_body, base_url=str(workspace_dir)).write_pdf(str(pdf_path), stylesheets=[css])
+            print(f"PDF generated successfully via WeasyPrint: {pdf_path}")
+            return pdf_path
+        
+        except Exception as e:
+            print(f"[PDF Warning] WeasyPrint failed: {e}")
+
+        # Strategy 2: xhtml2pdf Fallback
+        try:
+            from xhtml2pdf import pisa
+            with open(pdf_path, "wb") as pdf_file:
+                pisa_status = pisa.CreatePDF(html_body, dest=pdf_file, encoding='utf-8')
+            if not pisa_status.err:
+                print(f"PDF generated successfully via xhtml2pdf: {pdf_path}")
+                return pdf_path
+        except Exception as e:
+            print(f"[PDF Error] xhtml2pdf failed: {e}")
+
+        return None
 
     def generate_pdf(
         self,
@@ -457,19 +537,22 @@ class ReportService:
         images: List[dict],
         base_name: str,
         export_dir: str,
-        session_id: str
+        session_id: str,
+        user_id: str = "default"
     ) -> Optional[Path]:
-        """生成 PDF 报告，使用 pypandoc + xelatex"""
-        return self._save_pdf(md_text, base_name, export_dir)
+        """生成 PDF 报告，使用 md->html->pdf 方式"""
+        workspace_dir = self.workspace_service.get_session_workspace(session_id, user_id)
+        return self._save_pdf_via_html(md_text, base_name, workspace_dir, export_dir)
 
     def export_report(
         self,
         messages: List[dict],
         title: str,
-        session_id: str
+        session_id: str,
+        user_id: str = "default"
     ) -> dict:
         """导出报告为 PDF"""
-        workspace_dir = self.workspace_service.get_session_workspace(session_id)
+        workspace_dir = self.workspace_service.get_session_workspace(session_id, user_id)
 
         md_text, images = self.extract_sections_from_messages(messages)
         if not md_text:
@@ -485,9 +568,9 @@ class ReportService:
         # 保存 Markdown
         md_path = self.save_md(md_text, base_name, export_dir)
 
-        # 生成 PDF
+        # 生成 PDF (使用 md->html->pdf 方式)
         pdf_path = self.generate_pdf(
-            md_text, images, base_name, export_dir, session_id
+            md_text, images, base_name, export_dir, session_id, user_id
         )
 
         # 构建返回结果
@@ -498,14 +581,14 @@ class ReportService:
             "images_count": len(images),
             "download_urls": {
                 "md": self.workspace_service.build_download_url(
-                    f"{session_id}/generated/{md_path.name}"
+                    f"{user_id}/{session_id}/generated/{md_path.name}"
                 ),
             }
         }
 
         if pdf_path:
             result["download_urls"]["pdf"] = self.workspace_service.build_download_url(
-                f"{session_id}/generated/{pdf_path.name}"
+                f"{user_id}/{session_id}/generated/{pdf_path.name}"
             )
 
         print(f"Export result: {result}")

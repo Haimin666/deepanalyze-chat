@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { API_URLS } from "@/lib/config";
+import { API_URLS, authFetch } from "@/lib/config";
 import { useSessionStore, StoredMessage } from "@/lib/store";
 import { Message } from "../types";
 import { getPrevUserQuestionText } from "../utils";
@@ -180,7 +180,7 @@ export function useChat(
     setIsTyping(true);
 
     try {
-      const response = await fetch(API_URLS.CHAT_COMPLETIONS, {
+      const response = await authFetch(API_URLS.CHAT_COMPLETIONS, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

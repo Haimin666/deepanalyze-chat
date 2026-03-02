@@ -22,11 +22,22 @@ class WorkspaceService:
         """确保基础目录存在"""
         os.makedirs(self.base_dir, exist_ok=True)
 
-    def get_session_workspace(self, session_id: str) -> str:
-        """获取指定会话的工作区路径"""
+    def get_session_workspace(self, session_id: str, user_id: str = "default") -> str:
+        """获取指定会话的工作区路径
+        
+        Args:
+            session_id: 会话ID
+            user_id: 用户ID，用于用户隔离，默认为 "default"
+        
+        Returns:
+            工作区路径: {WORKSPACE_BASE_DIR}/{user_id}/{session_id}
+        """
         if not session_id:
             session_id = "default"
-        session_dir = os.path.join(self.base_dir, session_id)
+        if not user_id:
+            user_id = "default"
+        # 用户隔离：路径结构为 {base_dir}/{user_id}/{session_id}
+        session_dir = os.path.join(self.base_dir, user_id, session_id)
         os.makedirs(session_dir, exist_ok=True)
         return session_dir
 
@@ -59,9 +70,9 @@ class WorkspaceService:
                 return icon
         return "📁"
 
-    def get_files(self, session_id: str) -> List[WorkspaceFile]:
+    def get_files(self, session_id: str, user_id: str = "default") -> List[WorkspaceFile]:
         """获取工作区文件列表"""
-        workspace_dir = self.get_session_workspace(session_id)
+        workspace_dir = self.get_session_workspace(session_id, user_id)
         generated_dir = Path(workspace_dir) / "generated"
 
         # 获取 generated 目录下的文件名集合
@@ -77,7 +88,7 @@ class WorkspaceService:
                 if file_path.name in generated_files:
                     continue
                 stat = file_path.stat()
-                rel_path = f"{session_id}/{file_path.name}"
+                rel_path = f"{user_id}/{session_id}/{file_path.name}"
                 preview_extensions = [
                     ".jpg", ".jpeg", ".png", ".gif", ".bmp",
                     ".pdf", ".txt", ".doc", ".docx", ".csv", ".xlsx"
@@ -139,28 +150,28 @@ class WorkspaceService:
         except Exception:
             return path.name
 
-    def get_tree(self, session_id: str) -> dict:
+    def get_tree(self, session_id: str, user_id: str = "default") -> dict:
         """获取文件树"""
-        workspace_dir = self.get_session_workspace(session_id)
+        workspace_dir = self.get_session_workspace(session_id, user_id)
         root = Path(workspace_dir)
         tree_data = self.build_tree(root, root)
 
-        # 在下载链接前加上 session_id 前缀
-        self._prefix_urls(tree_data, session_id)
+        # 在下载链接前加上 user_id/session_id 前缀
+        self._prefix_urls(tree_data, user_id, session_id)
         return tree_data
 
-    def _prefix_urls(self, node: dict, session_id: str):
-        """为URL添加session_id前缀"""
+    def _prefix_urls(self, node: dict, user_id: str, session_id: str):
+        """为URL添加user_id/session_id前缀"""
         if "download_url" in node and node["download_url"]:
             rel = node.get("path", "")
-            node["download_url"] = self.build_download_url(f"{session_id}/{rel}")
+            node["download_url"] = self.build_download_url(f"{user_id}/{session_id}/{rel}")
         if "children" in node:
             for child in node["children"]:
-                self._prefix_urls(child, session_id)
+                self._prefix_urls(child, user_id, session_id)
 
-    def delete_file(self, path: str, session_id: str) -> bool:
+    def delete_file(self, path: str, session_id: str, user_id: str = "default") -> bool:
         """删除文件"""
-        workspace_dir = self.get_session_workspace(session_id)
+        workspace_dir = self.get_session_workspace(session_id, user_id)
         abs_workspace = Path(workspace_dir).resolve()
         target = (abs_workspace / path).resolve()
 
@@ -174,9 +185,9 @@ class WorkspaceService:
         target.unlink()
         return True
 
-    def delete_dir(self, path: str, session_id: str, recursive: bool = True) -> bool:
+    def delete_dir(self, path: str, session_id: str, user_id: str = "default", recursive: bool = True) -> bool:
         """删除目录"""
-        workspace_dir = self.get_session_workspace(session_id)
+        workspace_dir = self.get_session_workspace(session_id, user_id)
         abs_workspace = Path(workspace_dir).resolve()
         target = (abs_workspace / path).resolve()
 
@@ -195,11 +206,11 @@ class WorkspaceService:
             target.rmdir()
         return True
 
-    def move_path(self, src: str, dst_dir: str, session_id: str) -> str:
+    def move_path(self, src: str, dst_dir: str, session_id: str, user_id: str = "default") -> str:
         """移动文件/目录"""
         from utils.file_utils import uniquify_path
 
-        workspace_dir = self.get_session_workspace(session_id)
+        workspace_dir = self.get_session_workspace(session_id, user_id)
         abs_workspace = Path(workspace_dir).resolve()
 
         abs_src = (abs_workspace / src).resolve()
@@ -217,11 +228,11 @@ class WorkspaceService:
         shutil.move(str(abs_src), str(target))
         return str(target.relative_to(abs_workspace))
 
-    def upload_files(self, files: List, session_id: str, dir_path: str = "") -> List[dict]:
+    def upload_files(self, files: List, session_id: str, user_id: str = "default", dir_path: str = "") -> List[dict]:
         """上传文件"""
         from utils.file_utils import uniquify_path
 
-        workspace_dir = self.get_session_workspace(session_id)
+        workspace_dir = self.get_session_workspace(session_id, user_id)
         abs_workspace = Path(workspace_dir).resolve()
 
         if dir_path:
@@ -246,9 +257,9 @@ class WorkspaceService:
             })
         return saved
 
-    def clear_workspace(self, session_id: str) -> bool:
+    def clear_workspace(self, session_id: str, user_id: str = "default") -> bool:
         """清空工作区"""
-        workspace_dir = self.get_session_workspace(session_id)
+        workspace_dir = self.get_session_workspace(session_id, user_id)
         if os.path.exists(workspace_dir):
             shutil.rmtree(workspace_dir)
         os.makedirs(workspace_dir, exist_ok=True)

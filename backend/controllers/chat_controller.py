@@ -16,7 +16,7 @@ class ChatController:
     def __init__(self, workspace_service: WorkspaceService, code_service: CodeService):
         self.chat_service = ChatService(workspace_service, code_service)
 
-    async def chat_completions(self, body: dict = Body(...)):
+    async def chat_completions(self, body: dict = Body(...), user_id: str = "default"):
         """聊天补全（流式）"""
         messages = body.get("messages", [])
         workspace = body.get("workspace", [])
@@ -24,7 +24,7 @@ class ChatController:
 
         def generate():
             for delta_content in self.chat_service.bot_stream(
-                messages, workspace, session_id
+                messages, workspace, session_id, user_id
             ):
                 chunk = {
                     "id": "chatcmpl-stream",
@@ -60,7 +60,7 @@ class ReportController:
     def __init__(self, workspace_service: WorkspaceService):
         self.report_service = ReportService(workspace_service)
 
-    async def export_report(self, body: dict = Body(...)):
+    async def export_report(self, body: dict = Body(...), user_id: str = "default"):
         """导出报告"""
         from fastapi import HTTPException
         from fastapi.responses import JSONResponse
@@ -73,7 +73,7 @@ class ReportController:
             if not isinstance(messages, list):
                 raise HTTPException(status_code=400, detail="messages must be a list")
 
-            result = self.report_service.export_report(messages, title, session_id)
+            result = self.report_service.export_report(messages, title, session_id, user_id)
             return JSONResponse(result)
 
         except HTTPException:

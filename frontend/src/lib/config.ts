@@ -14,6 +14,60 @@ export const API_CONFIG = {
   FILE_SERVER_BASE_URL,
 };
 
+/**
+ * 获取认证请求头
+ * 从 localStorage 读取 auth-storage 中的 token
+ */
+export function getAuthHeaders(): Record<string, string> {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  
+  try {
+    const authStorageStr = localStorage.getItem("auth-storage");
+    if (!authStorageStr) {
+      return {};
+    }
+    
+    const authStorage = JSON.parse(authStorageStr);
+    const token = authStorage?.state?.token;
+    
+    if (!token) {
+      return {};
+    }
+    
+    return {
+      "Authorization": `Bearer ${token}`,
+    };
+  } catch (e) {
+    console.error("Failed to get auth headers:", e);
+    return {};
+  }
+}
+
+/**
+ * 创建带有认证的 fetch 请求
+ * @param url 请求 URL
+ * @param options fetch 选项
+ * @returns fetch Promise
+ */
+export async function authFetch(
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const authHeaders = getAuthHeaders();
+  
+  const mergedOptions: RequestInit = {
+    ...options,
+    headers: {
+      ...options.headers,
+      ...authHeaders,
+    },
+  };
+  
+  return fetch(url, mergedOptions);
+}
+
 // API URL 映射
 export const API_URLS = {
   // 聊天相关

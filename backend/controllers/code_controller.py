@@ -15,7 +15,7 @@ class CodeController:
     def __init__(self, workspace_service: WorkspaceService):
         self.code_service = CodeService(workspace_service)
 
-    async def execute_code(self, request: dict):
+    async def execute_code(self, request: dict, user_id: str = "default"):
         """执行Python代码"""
         try:
             code = request.get("code", "")
@@ -24,8 +24,8 @@ class CodeController:
             if not code:
                 raise HTTPException(status_code=400, detail="No code provided")
 
-            # 获取工作区目录
-            workspace_dir = self.code_service.workspace_service.get_session_workspace(session_id)
+            # 获取工作区目录（使用用户隔离）
+            workspace_dir = self.code_service.workspace_service.get_session_workspace(session_id, user_id)
 
             # 在线程池中执行代码
             result = await run_in_threadpool(

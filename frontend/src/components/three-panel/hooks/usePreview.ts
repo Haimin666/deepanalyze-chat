@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { API_CONFIG } from "@/lib/config";
+import { API_CONFIG, authFetch } from "@/lib/config";
 import { WorkspaceFile, PreviewType } from "../types";
 import { normalizeToLocalFileUrl, ensureGeneratedInUrl } from "../url-utils";
 
@@ -49,7 +49,7 @@ export function usePreview() {
         file.preview_url || file.download_url
       );
       const target = ensureGeneratedInUrl(normalized);
-      const res = await fetch(
+      const res = await authFetch(
         `${API_CONFIG.BACKEND_BASE_URL}/proxy?url=${encodeURIComponent(target)}`
       );
       const contentType = res.headers.get("content-type") || "";
@@ -104,7 +104,7 @@ export function usePreview() {
         previewDownloadUrl || previewContent
       );
       const target = ensureGeneratedInUrl(normalized);
-      const res = await fetch(
+      const res = await authFetch(
         `${API_CONFIG.BACKEND_BASE_URL}/proxy?url=${encodeURIComponent(target)}`
       );
       if (!res.ok) throw new Error("download failed");
@@ -128,7 +128,7 @@ export function usePreview() {
     try {
       const normalized = normalizeToLocalFileUrl(rawUrl);
       const target = ensureGeneratedInUrl(normalized);
-      const res = await fetch(
+      const res = await authFetch(
         `${API_CONFIG.BACKEND_BASE_URL}/proxy?url=${encodeURIComponent(target)}`
       );
       if (!res.ok) throw new Error("download failed");

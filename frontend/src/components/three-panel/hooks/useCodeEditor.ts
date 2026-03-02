@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import type React from "react";
-import { API_URLS } from "@/lib/config";
+import { API_URLS, authFetch } from "@/lib/config";
 
 /**
  * 代码编辑器管理 Hook
@@ -47,7 +47,7 @@ export function useCodeEditor(sessionId: string) {
   const executeCode = useCallback(async () => {
     setIsExecutingCode(true);
     try {
-      const response = await fetch(API_URLS.EXECUTE_CODE, {
+      const response = await authFetch(API_URLS.EXECUTE_CODE, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
