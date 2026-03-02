@@ -32,7 +32,7 @@ export const ChatMessageItem = memo(
               </div>
             </div>
             <Avatar>
-              <AvatarImage src="/placeholder-user.jpg" alt="User" />
+              <AvatarImage src="/placeholder-user.png" alt="User" />
               <AvatarFallback className="text-[10px]">U</AvatarFallback>
             </Avatar>
           </div>
