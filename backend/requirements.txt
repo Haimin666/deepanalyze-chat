@@ -1,0 +1,11 @@
+fastapi>=0.100.0
+uvicorn>=0.23.0
+openai>=1.0.0
+httpx>=0.24.0
+pypandoc>=1.11
+python-multipart>=0.0.6
+
+# MySQL 数据库
+sqlalchemy>=2.0.0
+pymysql>=1.1.0
+bcrypt>=4.0.0

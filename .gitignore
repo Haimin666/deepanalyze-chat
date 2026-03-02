@@ -178,6 +178,7 @@ workspace/
 docker-compose.override.yml
 
 # Node.js (from frontend)
+frontend/.next
 node_modules/
 .npm/
 .yarn/
