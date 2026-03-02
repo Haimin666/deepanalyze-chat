@@ -1,0 +1,17 @@
+[Unit]
+Description=DeepAnalyze Backend API Service
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/deepanalyze/backend
+Environment="PATH=/usr/local/bin:/usr/bin"
+ExecStart=/usr/bin/python3 main.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

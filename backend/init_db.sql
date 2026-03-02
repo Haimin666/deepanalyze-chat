@@ -1,10 +1,11 @@
--- Three Panel Interface 数据库初始化脚本
+-- DeepAnalyze 数据库初始化脚本
 -- MySQL 数据库
+-- 生产环境版本 - 不包含测试数据
 
 -- 创建数据库（如果不存在）
-CREATE DATABASE IF NOT EXISTS three_panel DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS deepanalyze DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-USE three_panel;
+USE deepanalyze;
 
 -- 用户表
 CREATE TABLE IF NOT EXISTS users (
@@ -60,13 +61,6 @@ CREATE TABLE IF NOT EXISTS workspace_files (
     INDEX idx_path (path(255))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 插入默认用户（密码使用 bcrypt 哈希）
--- admin123 的 bcrypt 哈希
-INSERT INTO users (id, username, password_hash, name, role) VALUES
-('1', 'admin', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.aOy7.aqP.qO8Pi', 'Admin User', 'admin'),
-('2', 'user', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.aOy7.aqP.qO8Pi', 'Normal User', 'user')
-ON DUPLICATE KEY UPDATE username = VALUES(username);
-
 -- 创建视图：用户会话统计
 CREATE OR REPLACE VIEW v_user_session_stats AS
 SELECT 
@@ -79,3 +73,6 @@ SELECT
 FROM users u
 LEFT JOIN sessions s ON u.id = s.user_id
 GROUP BY u.id, u.username, u.name;
+
+-- 注意：默认管理员账户将由应用程序自动创建
+-- 默认账户: admin / admin123
