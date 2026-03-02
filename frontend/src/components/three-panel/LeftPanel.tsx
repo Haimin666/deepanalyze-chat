@@ -119,9 +119,14 @@ export function LeftPanel({
               ref={fileInputRef}
               type="file"
               multiple
-              onChange={(e) => e.target.files && onFileUpload(e.target.files)}
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  onFileUpload(e.target.files);
+                  // 重置 input，允许重复上传同一文件
+                  e.target.value = '';
+                }
+              }}
               className="hidden"
-              accept="*"
             />
             <AlertDialog>
               <AlertDialogTrigger asChild>

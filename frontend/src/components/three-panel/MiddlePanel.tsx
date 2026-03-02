@@ -179,7 +179,6 @@ export function MiddlePanel({
               }
             }}
             className="hidden"
-            accept="*"
           />
           <Button
             variant="ghost"

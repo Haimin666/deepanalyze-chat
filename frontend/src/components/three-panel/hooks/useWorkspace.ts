@@ -136,10 +136,26 @@ export function useWorkspace(sessionId: string) {
 
   // 上传文件到指定目录
   const uploadToDir = useCallback(async (dirPath: string, files: FileList | File[]) => {
+    // 验证 sessionId
+    if (!sessionId) {
+      setUploadMsg("上传失败：会话未初始化");
+      setTimeout(() => setUploadMsg(""), 3000);
+      return;
+    }
+    
+    // 验证文件
+    const arr: File[] = Array.from(files as File[]);
+    if (arr.length === 0) {
+      setUploadMsg("请选择要上传的文件");
+      setTimeout(() => setUploadMsg(""), 2000);
+      return;
+    }
+    
     try {
       setIsUploading(true);
+      setUploadMsg(`正在上传 ${arr.length} 个文件...`);
+      
       const form = new FormData();
-      const arr: File[] = Array.from(files as File[]);
       arr.forEach((f) => form.append("files", f));
       
       // 使用正确的 upload-to 接口
@@ -147,19 +163,26 @@ export function useWorkspace(sessionId: string) {
         dirPath || ""
       )}&session_id=${encodeURIComponent(sessionId)}`;
       
+      console.log("[Upload] Starting upload to:", url);
+      
       const response = await fetch(url, { method: "POST", body: form });
       
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error("[Upload] Server error:", response.status, errorText);
+        throw new Error(`上传失败: ${response.status} - ${errorText}`);
       }
+      
+      const result = await response.json();
+      console.log("[Upload] Success:", result);
       
       await loadWorkspaceTree();
       await loadWorkspaceFiles();
       setUploadMsg(`上传成功 ${arr.length} 个文件`);
       setTimeout(() => setUploadMsg(""), 2000);
     } catch (e) {
-      console.error("upload to dir error", e);
-      setUploadMsg("上传失败，请检查后端服务是否运行");
+      console.error("[Upload] Error:", e);
+      setUploadMsg(`上传失败: ${e instanceof Error ? e.message : "未知错误"}`);
       setTimeout(() => setUploadMsg(""), 3000);
     }
     setIsUploading(false);
