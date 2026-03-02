@@ -430,6 +430,27 @@ class ReportService:
         print("WARNING: No Chinese font found, PDF may have encoding issues")
         return None
 
+    def _save_pdf(self, md_text: str, base_name: str, workspace_dir: str) -> Optional[Path]:
+        """使用 pypandoc + xelatex 生成 PDF"""
+        Path(workspace_dir).mkdir(parents=True, exist_ok=True)
+        pdf_path = uniquify_path(Path(workspace_dir) / f"{base_name}.pdf")
+        try:
+            import pypandoc
+            pypandoc.convert_text(
+                md_text,
+                "pdf",
+                format="md",
+                outputfile=str(pdf_path),
+                extra_args=[
+                    "--standalone",
+                    "--pdf-engine=xelatex",
+                ],
+            )
+            return pdf_path
+        except Exception as e:
+            print(f"PDF generation failed: {e}")
+            return None
+
     def generate_pdf(
         self,
         md_text: str,
@@ -438,266 +459,8 @@ class ReportService:
         export_dir: str,
         session_id: str
     ) -> Optional[Path]:
-        """生成 PDF 报告，支持中文和图片"""
-        try:
-            # 尝试使用 reportlab
-            from reportlab.lib.pagesizes import A4
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from reportlab.lib.units import inch, cm
-            from reportlab.platypus import (
-                SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, PageBreak
-            )
-            from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
-            from reportlab.pdfbase import pdfmetrics
-            from reportlab.pdfbase.ttfonts import TTFont
-            from reportlab.lib.colors import black, HexColor
-
-            # 创建图片保存目录
-            images_dir = os.path.join(export_dir, "_images")
-            os.makedirs(images_dir, exist_ok=True)
-
-            # PDF 路径
-            pdf_path = uniquify_path(Path(export_dir) / f"{base_name}.pdf")
-
-            # 创建 PDF 文档
-            doc = SimpleDocTemplate(
-                str(pdf_path),
-                pagesize=A4,
-                rightMargin=2*cm,
-                leftMargin=2*cm,
-                topMargin=2*cm,
-                bottomMargin=2*cm,
-                title="分析报告",
-                author="DeepAnalyze"
-            )
-
-            # 查找并注册中文字体
-            font_name = "Helvetica"
-            chinese_font_path = self._find_chinese_font()
-
-            if chinese_font_path:
-                try:
-                    font_key = "ChineseFont"
-                    # 尝试直接注册
-                    try:
-                        pdfmetrics.registerFont(TTFont(font_key, chinese_font_path))
-                        font_name = font_key
-                        print(f"Successfully registered Chinese font: {chinese_font_path}")
-                    except Exception as e1:
-                        # 某些字体文件可能需要 subfontIndex
-                        print(f"Direct registration failed, trying subfontIndex: {e1}")
-                        try:
-                            pdfmetrics.registerFont(TTFont(font_key, chinese_font_path, subfontIndex=0))
-                            font_name = font_key
-                            print(f"Registered font with subfontIndex: {chinese_font_path}")
-                        except Exception as e2:
-                            print(f"Font registration with subfontIndex also failed: {e2}")
-                except Exception as e:
-                    print(f"Font registration error: {e}")
-            else:
-                print("WARNING: No Chinese font found, PDF may have encoding issues")
-
-            # 样式
-            styles = getSampleStyleSheet()
-
-            title_style = ParagraphStyle(
-                'CustomTitle',
-                parent=styles['Title'],
-                fontName=font_name,
-                fontSize=20,
-                spaceAfter=20,
-                spaceBefore=10,
-                textColor=black,
-                alignment=TA_CENTER,
-            )
-
-            heading1_style = ParagraphStyle(
-                'CustomHeading1',
-                parent=styles['Heading1'],
-                fontName=font_name,
-                fontSize=16,
-                spaceAfter=12,
-                spaceBefore=20,
-                textColor=HexColor('#1a1a1a'),
-            )
-
-            heading2_style = ParagraphStyle(
-                'CustomHeading2',
-                parent=styles['Heading2'],
-                fontName=font_name,
-                fontSize=14,
-                spaceAfter=10,
-                spaceBefore=16,
-                textColor=HexColor('#333333'),
-            )
-
-            body_style = ParagraphStyle(
-                'CustomBody',
-                parent=styles['Normal'],
-                fontName=font_name,
-                fontSize=10,
-                leading=16,
-                spaceAfter=8,
-                textColor=black,
-                alignment=TA_JUSTIFY,
-            )
-
-            code_style = ParagraphStyle(
-                'CustomCode',
-                parent=styles['Code'],
-                fontName='Courier',
-                fontSize=8,
-                leading=10,
-                spaceAfter=6,
-                leftIndent=10,
-                backColor=HexColor('#f5f5f5'),
-            )
-
-            # 下载图片
-            downloaded_images: Dict[str, str] = {}
-            for img_info in images:
-                img_path = self.download_image(img_info["url"], images_dir)
-                if img_path:
-                    downloaded_images[img_info["url"]] = img_path
-                    print(f"Downloaded image: {img_path}")
-
-            # 构建 PDF 内容
-            story = []
-
-            # 标题
-            story.append(Paragraph("分析报告", title_style))
-            story.append(Paragraph(
-                f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                ParagraphStyle('DateStyle', parent=body_style, fontSize=9, textColor=HexColor('#666666'))
-            ))
-            story.append(Spacer(1, 0.3*inch))
-
-            # 解析 Markdown 并构建 PDF 内容
-            lines = md_text.split("\n")
-            in_code_block = False
-            code_buffer = []
-
-            for line in lines:
-                # 处理代码块
-                if line.strip().startswith("```"):
-                    if in_code_block:
-                        # 结束代码块 - 输出代码
-                        if code_buffer:
-                            for code_line in code_buffer:
-                                try:
-                                    escaped = code_line.replace("&", "&amp;")
-                                    escaped = escaped.replace("<", "&lt;")
-                                    escaped = escaped.replace(">", "&gt;")
-                                    if escaped.strip():
-                                        story.append(Paragraph(
-                                            f"<font face='Courier' size='8'>{escaped}</font>",
-                                            code_style
-                                        ))
-                                except Exception:
-                                    pass
-                        code_buffer = []
-                    in_code_block = not in_code_block
-                    continue
-
-                if in_code_block:
-                    code_buffer.append(line)
-                    continue
-
-                line_stripped = line.strip()
-
-                if not line_stripped:
-                    story.append(Spacer(1, 6))
-                    continue
-
-                if line_stripped == "---":
-                    story.append(Spacer(1, 0.2*inch))
-                    continue
-
-                # 标题
-                if line_stripped.startswith("# "):
-                    text = line_stripped[2:].strip()
-                    story.append(Paragraph(text, heading1_style))
-                elif line_stripped.startswith("## "):
-                    text = line_stripped[3:].strip()
-                    story.append(Paragraph(text, heading2_style))
-                elif line_stripped.startswith("### "):
-                    text = line_stripped[4:].strip()
-                    story.append(Paragraph(text, heading2_style))
-
-                # 图片
-                elif line_stripped.startswith("!["):
-                    img_match = re.match(r"!\[([^\]]*)\]\(([^)]+)\)", line_stripped)
-                    if img_match:
-                        alt, url = img_match.groups()
-                        img_path = downloaded_images.get(url)
-                        if not img_path:
-                            for key in downloaded_images:
-                                if url in key or key.endswith(url.split("/")[-1]):
-                                    img_path = downloaded_images[key]
-                                    break
-
-                        if img_path and os.path.exists(img_path):
-                            try:
-                                from PIL import Image as PILImage
-                                with PILImage.open(img_path) as pil_img:
-                                    img_width, img_height = pil_img.size
-
-                                max_width = 14 * cm
-                                max_height = 10 * cm
-                                scale = min(max_width / img_width, max_height / img_height, 1.0)
-                                display_width = img_width * scale
-                                display_height = img_height * scale
-
-                                img = RLImage(img_path, width=display_width, height=display_height)
-                                img.hAlign = 'CENTER'
-                                story.append(Spacer(1, 6))
-                                story.append(img)
-                                story.append(Spacer(1, 6))
-                            except Exception as e:
-                                print(f"Failed to add image to PDF: {e}")
-                                story.append(Paragraph(f"[图片: {alt}]", body_style))
-
-                # 文件链接
-                elif line_stripped.startswith("- ["):
-                    link_match = re.match(r"- \[([^\]]+)\]\(([^)]+)\)", line_stripped)
-                    if link_match:
-                        name, url = link_match.groups()
-                        story.append(Paragraph(f"• {name}", body_style))
-
-                # 普通段落
-                else:
-                    text = line_stripped
-                    text = text.replace("&", "&amp;")
-                    text = text.replace("<", "&lt;")
-                    text = text.replace(">", "&gt;")
-                    text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text)
-                    text = re.sub(r"\*([^*]+)\*", r"<i>\1</i>", text)
-                    text = re.sub(r"`([^`]+)`", r"<font face='Courier' size='9'>\1</font>", text)
-
-                    if text:
-                        try:
-                            story.append(Paragraph(text, body_style))
-                        except Exception:
-                            try:
-                                clean_text = re.sub(r"[^\w\s\-.,!?;:'\"（）【】《》，。！？、；：\d]", "", line_stripped)
-                                if clean_text:
-                                    story.append(Paragraph(clean_text, body_style))
-                            except:
-                                pass
-
-            # 生成 PDF
-            doc.build(story)
-            print(f"PDF generated successfully: {pdf_path}")
-            return pdf_path
-
-        except ImportError as e:
-            print(f"ReportLab not available: {e}")
-            return None
-        except Exception as e:
-            print(f"PDF generation failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+        """生成 PDF 报告，使用 pypandoc + xelatex"""
+        return self._save_pdf(md_text, base_name, export_dir)
 
     def export_report(
         self,

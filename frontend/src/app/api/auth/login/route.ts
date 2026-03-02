@@ -1,43 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// 预设用户数据 - 只保留 admin 用户
-const PRESET_USERS = [
-  {
-    id: "1",
-    username: "admin",
-    name: "Admin User",
-    role: "admin",
-    password: "admin123",
-    createdAt: "2024-01-01T00:00:00Z",
-  },
-];
+const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8200";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { username, password } = body;
 
-    // 查找用户
-    const user = PRESET_USERS.find((u) => u.username === username);
+    const response = await fetch(`${BACKEND_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ username, password }),
+    });
 
-    if (!user || user.password !== password) {
-      return NextResponse.json(
-        { error: "用户名或密码错误" },
-        { status: 401 }
-      );
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
     }
 
-    // 返回用户信息（不包含密码）
-    const { password: _, ...userWithoutPassword } = user;
+    // 创建响应并设置 cookie
+    const res = NextResponse.json(data);
+    
+    // 如果后端返回了 token，设置到 cookie
+    if (data.token) {
+      res.cookies.set("auth_token", data.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        path: "/",
+      });
+    }
 
-    return NextResponse.json({
-      success: true,
-      user: userWithoutPassword,
-      token: `mock_token_${Date.now()}`, // 模拟 token
-    });
+    return res;
   } catch (error) {
+    console.error("Proxy POST /auth/login error:", error);
     return NextResponse.json(
-      { error: "请求处理失败" },
+      { error: "登录请求失败" },
       { status: 500 }
     );
   }

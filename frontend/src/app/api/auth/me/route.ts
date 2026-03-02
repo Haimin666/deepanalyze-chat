@@ -1,25 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// 模拟获取当前用户信息
-export async function GET(request: NextRequest) {
-  // 从 header 获取 token（实际项目中应该验证 token）
-  const authHeader = request.headers.get("authorization");
+const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8200";
 
-  if (!authHeader) {
+export async function GET(request: NextRequest) {
+  try {
+    const cookieHeader = request.headers.get("cookie") || "";
+
+    const response = await fetch(`${BACKEND_BASE_URL}/auth/me`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Cookie": cookieHeader,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Proxy GET /auth/me error:", error);
     return NextResponse.json(
-      { error: "未授权" },
-      { status: 401 }
+      { error: "获取用户信息失败" },
+      { status: 500 }
     );
   }
-
-  // 模拟返回用户信息
-  return NextResponse.json({
-    user: {
-      id: "1",
-      email: "admin@example.com",
-      name: "Admin User",
-      role: "admin",
-      createdAt: "2024-01-01T00:00:00Z",
-    },
-  });
 }

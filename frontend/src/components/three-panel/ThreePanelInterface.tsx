@@ -318,14 +318,39 @@ export function ThreePanelInterface() {
 
   // 删除历史会话
   const handleDeleteSession = useCallback(
-    (id: string) => {
-      deleteSession(id);
-      // 如果删除的是当前会话，创建新会话
-      if (id === currentSessionId) {
-        createNewSession();
-        clearChat();
+    async (id: string) => {
+      try {
+        // 调用后端 API 删除会话
+        const response = await fetch(`${API_URLS.SESSIONS}/${id}`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error("Failed to delete session from backend:", errorData);
+        }
+
+        // 删除本地会话
+        deleteSession(id);
+        // 如果删除的是当前会话，创建新会话
+        if (id === currentSessionId) {
+          createNewSession();
+          clearChat();
+        }
+        toast({ description: "已删除会话" });
+      } catch (error) {
+        console.error("Delete session error:", error);
+        // 即使后端删除失败，也删除本地会话
+        deleteSession(id);
+        if (id === currentSessionId) {
+          createNewSession();
+          clearChat();
+        }
+        toast({ description: "已删除会话（本地）" });
       }
-      toast({ description: "已删除会话" });
     },
     [deleteSession, currentSessionId, createNewSession, clearChat, toast]
   );
