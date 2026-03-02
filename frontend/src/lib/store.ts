@@ -92,8 +92,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   checkTimeout: () => {
-    const { lastActivity, sessionTimeout, isAuthenticated } = get();
-    if (!isAuthenticated) return false;
+    const { lastActivity, sessionTimeout, isAuthenticated, initialized } = get();
+    // 未认证或未初始化时不检查超时
+    if (!isAuthenticated || !initialized) return false;
     
     const isTimeout = Date.now() - lastActivity > sessionTimeout;
     if (isTimeout) {

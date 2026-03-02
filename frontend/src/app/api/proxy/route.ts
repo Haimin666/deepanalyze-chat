@@ -13,7 +13,56 @@ function getTokenFromCookie(cookieHeader: string): string | null {
   return null;
 }
 
-// 代理请求
+// GET 请求 - 用于文件下载代理
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const url = searchParams.get("url");
+    const cookieHeader = request.headers.get("cookie") || "";
+    const token = getTokenFromCookie(cookieHeader);
+
+    if (!url) {
+      return NextResponse.json({ error: "URL parameter is required" }, { status: 400 });
+    }
+
+    const headers: Record<string, string> = {};
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    // 直接代理请求
+    const response = await fetch(url, {
+      method: "GET",
+      headers,
+    });
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: `Proxy fetch failed: ${response.status}` },
+        { status: response.status }
+      );
+    }
+
+    const contentType = response.headers.get("content-type") || "application/octet-stream";
+    const data = await response.arrayBuffer();
+
+    return new NextResponse(data, {
+      headers: {
+        "Content-Type": contentType,
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+  } catch (error) {
+    console.error("Proxy GET /proxy error:", error);
+    return NextResponse.json(
+      { error: "代理请求失败" },
+      { status: 500 }
+    );
+  }
+}
+
+// POST 请求 - 用于其他代理
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

@@ -158,23 +158,16 @@ export function ThreePanelInterface() {
     }
 
     if (isAuthenticated && currentUser) {
-      const isTimeout = checkTimeout();
-      if (isTimeout) {
-        setView("login");
-        toast({
-          description: "会话已过期，请重新登录",
-          variant: "destructive",
-        });
-      } else {
-        setView("main");
-        
-        // 检查用户是否变化
-        if (prevUserIdRef.current !== currentUser.id) {
-          // 用户变化，清空旧数据并加载新用户数据
-          clearAllSessions();
-          loadUserSessions();
-          prevUserIdRef.current = currentUser.id;
-        }
+      // 初始化完成后，不立即检查超时，让用户可以正常使用
+      // 超时检查由活动检测的 interval 负责
+      setView("main");
+      
+      // 检查用户是否变化
+      if (prevUserIdRef.current !== currentUser.id) {
+        // 用户变化，清空旧数据并加载新用户数据
+        clearAllSessions();
+        loadUserSessions();
+        prevUserIdRef.current = currentUser.id;
       }
     } else {
       setView("login");
@@ -184,7 +177,7 @@ export function ThreePanelInterface() {
         prevUserIdRef.current = null;
       }
     }
-  }, [initialized, isAuthenticated, currentUser, checkTimeout, toast, clearAllSessions, loadUserSessions]);
+  }, [initialized, isAuthenticated, currentUser, toast, clearAllSessions, loadUserSessions]);
 
   // 活动检测 - 更新最后活动时间
   useEffect(() => {

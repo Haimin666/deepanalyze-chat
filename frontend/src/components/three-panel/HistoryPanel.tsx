@@ -115,7 +115,7 @@ export function HistoryPanel({
                     </div>
                   </div>
                   
-                  {/* 删除按钮 */}
+                  {/* 删除按钮 - 始终可见 */}
                   <AlertDialog open={deleteDialogOpen === session.id} onOpenChange={(open) => {
                     if (!open) setDeleteDialogOpen(null);
                   }}>
@@ -123,7 +123,7 @@ export function HistoryPanel({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 w-7 p-0 shrink-0 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                        className="h-7 w-7 p-0 shrink-0 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors opacity-60 hover:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
                           setDeleteDialogOpen(session.id);
