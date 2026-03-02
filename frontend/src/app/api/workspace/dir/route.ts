@@ -13,36 +13,38 @@ function getTokenFromCookie(cookieHeader: string): string | null {
   return null;
 }
 
-export async function POST(request: NextRequest) {
+// 删除目录
+export async function DELETE(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const path = searchParams.get("path");
     const cookieHeader = request.headers.get("cookie") || "";
     const token = getTokenFromCookie(cookieHeader);
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
+    const headers: Record<string, string> = {};
 
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${BACKEND_BASE_URL}/auth/logout`, {
-      method: "POST",
+    const url = `${BACKEND_BASE_URL}/workspace/dir${path ? `?path=${encodeURIComponent(path)}` : ''}`;
+    const response = await fetch(url, {
+      method: "DELETE",
       headers,
     });
 
     const data = await response.json();
 
-    // 清除本地 cookie
-    const res = NextResponse.json(data);
-    res.cookies.delete("auth_token");
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
 
-    return res;
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Proxy POST /auth/logout error:", error);
-    // 即使后端失败，也清除本地 cookie
-    const res = NextResponse.json({ success: true, message: "已成功登出" });
-    res.cookies.delete("auth_token");
-    return res;
+    console.error("Proxy DELETE /workspace/dir error:", error);
+    return NextResponse.json(
+      { error: "删除目录失败" },
+      { status: 500 }
+    );
   }
 }

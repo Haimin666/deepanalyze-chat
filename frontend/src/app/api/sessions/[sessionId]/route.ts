@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8200";
 
+// 从 cookie 中获取 auth token
+function getTokenFromCookie(cookieHeader: string): string | null {
+  const cookies = cookieHeader.split(';');
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'auth_token' && value) {
+      return value;
+    }
+  }
+  return null;
+}
+
 // 获取单个会话详情
 export async function GET(
   request: NextRequest,
@@ -10,13 +22,19 @@ export async function GET(
   try {
     const { sessionId } = await params;
     const cookieHeader = request.headers.get("cookie") || "";
+    const token = getTokenFromCookie(cookieHeader);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
 
     const response = await fetch(`${BACKEND_BASE_URL}/sessions/${sessionId}`, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "Cookie": cookieHeader,
-      },
+      headers,
     });
 
     const data = await response.json();
@@ -44,13 +62,19 @@ export async function PUT(
     const { sessionId } = await params;
     const body = await request.json();
     const cookieHeader = request.headers.get("cookie") || "";
+    const token = getTokenFromCookie(cookieHeader);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
 
     const response = await fetch(`${BACKEND_BASE_URL}/sessions/${sessionId}`, {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "Cookie": cookieHeader,
-      },
+      headers,
       body: JSON.stringify(body),
     });
 
@@ -78,13 +102,19 @@ export async function DELETE(
   try {
     const { sessionId } = await params;
     const cookieHeader = request.headers.get("cookie") || "";
+    const token = getTokenFromCookie(cookieHeader);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
 
     const response = await fetch(`${BACKEND_BASE_URL}/sessions/${sessionId}`, {
       method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        "Cookie": cookieHeader,
-      },
+      headers,
     });
 
     const data = await response.json();

@@ -1,49 +1,50 @@
 /**
  * API 配置
+ * 所有请求使用相对路径，通过 Next.js API Routes 代理到后端
  */
 
-// 后端服务地址
-const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8200";
-
-// 文件服务器地址
-const FILE_SERVER_BASE_URL = process.env.NEXT_PUBLIC_FILE_SERVER_URL || "http://localhost:8100";
-
-// API 配置对象
-export const API_CONFIG = {
-  BACKEND_BASE_URL,
-  FILE_SERVER_BASE_URL,
+// API URL 映射 - 使用相对路径，通过 Next.js API Routes 代理
+export const API_URLS = {
+  // 聊天相关 - 直接请求后端（流式响应需要）
+  CHAT_COMPLETIONS: `/api/chat/completions`,
+  CHAT_STOP: `/api/chat/stop`,
+  CHAT_STREAM_SESSION: `/api/chat/stream-session`,
+  
+  // 报告导出
+  EXPORT_REPORT: `/api/export/report`,
+  
+  // 代码执行
+  EXECUTE_CODE: `/api/execute`,
+  
+  // 工作区相关
+  WORKSPACE_FILES: `/api/workspace/files`,
+  WORKSPACE_TREE: `/api/workspace/tree`,
+  WORKSPACE_DELETE_FILE: `/api/workspace/file`,
+  WORKSPACE_DELETE_DIR: `/api/workspace/dir`,
+  WORKSPACE_UPLOAD_TO: `/api/workspace/upload-to`,
+  WORKSPACE_CLEAR: `/api/workspace/clear`,
+  
+  // 代理
+  PROXY: `/api/proxy`,
+  
+  // 认证相关 - 通过 Next.js API Routes
+  AUTH_LOGIN: `/api/auth/login`,
+  AUTH_LOGOUT: `/api/auth/logout`,
+  AUTH_ME: `/api/auth/me`,
+  AUTH_CHANGE_PASSWORD: `/api/auth/change-password`,
+  
+  // 用户管理
+  USERS: `/api/users`,
+  
+  // 会话管理
+  SESSIONS: `/api/sessions`,
+  SESSION_MESSAGES: (sessionId: string) => `/api/sessions/${sessionId}/messages`,
+  SESSION_MESSAGES_BATCH: (sessionId: string) => `/api/sessions/${sessionId}/messages/batch`,
 };
 
 /**
- * 获取认证请求头
- * 从 Zustand store 获取 token（非 hook 方式）
- */
-export function getAuthHeaders(): Record<string, string> {
-  if (typeof window === "undefined") {
-    return {};
-  }
-  
-  try {
-    // 动态导入 store 以避免循环依赖
-    // 使用 Zustand 的 getState() 非 hook 方式获取状态
-    const { useAuthStore } = require("./store");
-    const token = useAuthStore.getState?.()?.token;
-    
-    if (!token) {
-      return {};
-    }
-    
-    return {
-      "Authorization": `Bearer ${token}`,
-    };
-  } catch (e) {
-    console.error("Failed to get auth headers:", e);
-    return {};
-  }
-}
-
-/**
  * 创建带有认证的 fetch 请求
+ * 使用 cookie 认证，无需手动添加 Authorization header
  * @param url 请求 URL
  * @param options fetch 选项
  * @returns fetch Promise
@@ -52,54 +53,31 @@ export async function authFetch(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const authHeaders = getAuthHeaders();
-  
-  const mergedOptions: RequestInit = {
+  // Cookie 会自动携带，无需手动设置 Authorization header
+  // Next.js API Routes 会从 cookie 读取 token 并转发给后端
+  return fetch(url, {
     ...options,
+    credentials: 'include', // 确保发送 cookie
     headers: {
       ...options.headers,
-      ...authHeaders,
     },
-  };
-  
-  return fetch(url, mergedOptions);
+  });
 }
 
-// API URL 映射
-export const API_URLS = {
-  // 聊天相关
-  CHAT_COMPLETIONS: `${BACKEND_BASE_URL}/chat/completions`,
-  CHAT_STOP: `${BACKEND_BASE_URL}/chat/stop`,
-  CHAT_STREAM_SESSION: `${BACKEND_BASE_URL}/chat/stream-session`,
-  
-  // 报告导出
-  EXPORT_REPORT: `${BACKEND_BASE_URL}/export/report`,
-  
-  // 代码执行
-  EXECUTE_CODE: `${BACKEND_BASE_URL}/execute`,
-  
-  // 工作区相关
-  WORKSPACE_FILES: `${BACKEND_BASE_URL}/workspace/files`,
-  WORKSPACE_TREE: `${BACKEND_BASE_URL}/workspace/tree`,
-  WORKSPACE_DELETE_FILE: `${BACKEND_BASE_URL}/workspace/file`,
-  WORKSPACE_DELETE_DIR: `${BACKEND_BASE_URL}/workspace/dir`,
-  WORKSPACE_UPLOAD_TO: `${BACKEND_BASE_URL}/workspace/upload-to`,
-  WORKSPACE_CLEAR: `${BACKEND_BASE_URL}/workspace/clear`,
-  
-  // 代理
-  PROXY: `${BACKEND_BASE_URL}/proxy`,
-  
-  // 认证相关 - 后端数据库API
-  AUTH_LOGIN: `${BACKEND_BASE_URL}/auth/login`,
-  AUTH_LOGOUT: `${BACKEND_BASE_URL}/auth/logout`,
-  AUTH_ME: `${BACKEND_BASE_URL}/auth/me`,
-  AUTH_CHANGE_PASSWORD: `${BACKEND_BASE_URL}/auth/change-password`,
-  
-  // 用户管理
-  USERS: `${BACKEND_BASE_URL}/users`,
-  
-  // 会话管理
-  SESSIONS: `${BACKEND_BASE_URL}/sessions`,
-  SESSION_MESSAGES: (sessionId: string) => `${BACKEND_BASE_URL}/sessions/${sessionId}/messages`,
-  SESSION_MESSAGES_BATCH: (sessionId: string) => `${BACKEND_BASE_URL}/sessions/${sessionId}/messages/batch`,
+/**
+ * 获取认证请求头（已弃用，保留兼容性）
+ * @deprecated 使用 authFetch 代替
+ */
+export function getAuthHeaders(): Record<string, string> {
+  return {};
+}
+
+// 后端服务地址（仅用于特殊场景）
+export const API_CONFIG = {
+  get BACKEND_BASE_URL() {
+    return process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8200";
+  },
+  get FILE_SERVER_BASE_URL() {
+    return process.env.NEXT_PUBLIC_FILE_SERVER_URL || "http://localhost:8100";
+  },
 };

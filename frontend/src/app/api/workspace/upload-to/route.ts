@@ -13,36 +13,42 @@ function getTokenFromCookie(cookieHeader: string): string | null {
   return null;
 }
 
+// 上传文件到指定目录
 export async function POST(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const dir = searchParams.get("dir") || "";
     const cookieHeader = request.headers.get("cookie") || "";
     const token = getTokenFromCookie(cookieHeader);
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
+    // 获取表单数据
+    const formData = await request.formData();
+
+    const headers: Record<string, string> = {};
 
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${BACKEND_BASE_URL}/auth/logout`, {
+    const url = `${BACKEND_BASE_URL}/workspace/upload-to${dir ? `?dir=${encodeURIComponent(dir)}` : ''}`;
+    const response = await fetch(url, {
       method: "POST",
       headers,
+      body: formData,
     });
 
     const data = await response.json();
 
-    // 清除本地 cookie
-    const res = NextResponse.json(data);
-    res.cookies.delete("auth_token");
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
 
-    return res;
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Proxy POST /auth/logout error:", error);
-    // 即使后端失败，也清除本地 cookie
-    const res = NextResponse.json({ success: true, message: "已成功登出" });
-    res.cookies.delete("auth_token");
-    return res;
+    console.error("Proxy POST /workspace/upload-to error:", error);
+    return NextResponse.json(
+      { error: "上传文件失败" },
+      { status: 500 }
+    );
   }
 }

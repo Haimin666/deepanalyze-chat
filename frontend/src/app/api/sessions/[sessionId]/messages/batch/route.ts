@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8200";
 
+// 从 cookie 中获取 auth token
 function getTokenFromCookie(cookieHeader: string): string | null {
   const cookies = cookieHeader.split(';');
   for (const cookie of cookies) {
@@ -13,8 +14,14 @@ function getTokenFromCookie(cookieHeader: string): string | null {
   return null;
 }
 
-export async function POST(request: NextRequest) {
+// 批量保存消息
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ sessionId: string }> }
+) {
   try {
+    const { sessionId } = await params;
+    const body = await request.json();
     const cookieHeader = request.headers.get("cookie") || "";
     const token = getTokenFromCookie(cookieHeader);
 
@@ -26,23 +33,24 @@ export async function POST(request: NextRequest) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${BACKEND_BASE_URL}/auth/logout`, {
+    const response = await fetch(`${BACKEND_BASE_URL}/sessions/${sessionId}/messages/batch`, {
       method: "POST",
       headers,
+      body: JSON.stringify(body),
     });
 
     const data = await response.json();
 
-    // 清除本地 cookie
-    const res = NextResponse.json(data);
-    res.cookies.delete("auth_token");
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
 
-    return res;
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Proxy POST /auth/logout error:", error);
-    // 即使后端失败，也清除本地 cookie
-    const res = NextResponse.json({ success: true, message: "已成功登出" });
-    res.cookies.delete("auth_token");
-    return res;
+    console.error("Proxy POST /sessions/[sessionId]/messages/batch error:", error);
+    return NextResponse.json(
+      { error: "批量保存消息失败" },
+      { status: 500 }
+    );
   }
 }

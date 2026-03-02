@@ -172,8 +172,8 @@ cython_debug/
 *.log
 logs/
 
-# Workspace files (generated during runtime)
-workspace/
+# Workspace files (generated during runtime) - only root level
+/workspace/
 
 # Docker
 docker-compose.override.yml

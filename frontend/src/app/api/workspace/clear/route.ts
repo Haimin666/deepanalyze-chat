@@ -13,36 +13,35 @@ function getTokenFromCookie(cookieHeader: string): string | null {
   return null;
 }
 
+// 清空工作区
 export async function POST(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get("cookie") || "";
     const token = getTokenFromCookie(cookieHeader);
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
+    const headers: Record<string, string> = {};
 
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${BACKEND_BASE_URL}/auth/logout`, {
+    const response = await fetch(`${BACKEND_BASE_URL}/workspace/clear`, {
       method: "POST",
       headers,
     });
 
     const data = await response.json();
 
-    // 清除本地 cookie
-    const res = NextResponse.json(data);
-    res.cookies.delete("auth_token");
+    if (!response.ok) {
+      return NextResponse.json(data, { status: response.status });
+    }
 
-    return res;
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Proxy POST /auth/logout error:", error);
-    // 即使后端失败，也清除本地 cookie
-    const res = NextResponse.json({ success: true, message: "已成功登出" });
-    res.cookies.delete("auth_token");
-    return res;
+    console.error("Proxy POST /workspace/clear error:", error);
+    return NextResponse.json(
+      { error: "清空工作区失败" },
+      { status: 500 }
+    );
   }
 }

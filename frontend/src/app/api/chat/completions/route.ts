@@ -13,8 +13,10 @@ function getTokenFromCookie(cookieHeader: string): string | null {
   return null;
 }
 
+// 聊天补全（流式响应）
 export async function POST(request: NextRequest) {
   try {
+    const body = await request.json();
     const cookieHeader = request.headers.get("cookie") || "";
     const token = getTokenFromCookie(cookieHeader);
 
@@ -26,23 +28,28 @@ export async function POST(request: NextRequest) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${BACKEND_BASE_URL}/auth/logout`, {
+    const response = await fetch(`${BACKEND_BASE_URL}/chat/completions`, {
       method: "POST",
       headers,
+      body: JSON.stringify(body),
     });
 
-    const data = await response.json();
+    // 流式响应直接透传
+    if (response.body) {
+      return new NextResponse(response.body, {
+        status: response.status,
+        headers: {
+          "Content-Type": response.headers.get("Content-Type") || "text/plain",
+        },
+      });
+    }
 
-    // 清除本地 cookie
-    const res = NextResponse.json(data);
-    res.cookies.delete("auth_token");
-
-    return res;
+    return NextResponse.json({ error: "No response body" }, { status: 500 });
   } catch (error) {
-    console.error("Proxy POST /auth/logout error:", error);
-    // 即使后端失败，也清除本地 cookie
-    const res = NextResponse.json({ success: true, message: "已成功登出" });
-    res.cookies.delete("auth_token");
-    return res;
+    console.error("Proxy POST /chat/completions error:", error);
+    return NextResponse.json(
+      { error: "聊天请求失败" },
+      { status: 500 }
+    );
   }
 }

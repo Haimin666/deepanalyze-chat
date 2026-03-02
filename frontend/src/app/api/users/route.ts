@@ -2,24 +2,39 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8200";
 
+function getTokenFromCookie(cookieHeader: string): string | null {
+  const cookies = cookieHeader.split(';');
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'auth_token' && value) {
+      return value;
+    }
+  }
+  return null;
+}
+
 // 获取用户列表
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
     const page = searchParams.get("page") || "1";
     const limit = searchParams.get("limit") || "10";
     const search = searchParams.get("search") || "";
 
-    // 从 cookie 获取认证 token
     const cookieHeader = request.headers.get("cookie") || "";
-    
+    const token = getTokenFromCookie(cookieHeader);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${BACKEND_BASE_URL}/users?page=${page}&limit=${limit}&search=${search}`, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "Cookie": cookieHeader,
-      },
+      headers,
     });
 
     const data = await response.json();
@@ -43,13 +58,19 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const cookieHeader = request.headers.get("cookie") || "";
+    const token = getTokenFromCookie(cookieHeader);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
 
     const response = await fetch(`${BACKEND_BASE_URL}/users`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Cookie": cookieHeader,
-      },
+      headers,
       body: JSON.stringify(body),
     });
 
@@ -74,6 +95,7 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const cookieHeader = request.headers.get("cookie") || "";
+    const token = getTokenFromCookie(cookieHeader);
     const { targetUserId, ...updateData } = body;
 
     if (!targetUserId) {
@@ -83,12 +105,17 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${BACKEND_BASE_URL}/users/${targetUserId}`, {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "Cookie": cookieHeader,
-      },
+      headers,
       body: JSON.stringify(updateData),
     });
 
@@ -114,6 +141,7 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
     const cookieHeader = request.headers.get("cookie") || "";
+    const token = getTokenFromCookie(cookieHeader);
 
     if (!userId) {
       return NextResponse.json(
@@ -122,12 +150,17 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${BACKEND_BASE_URL}/users/${userId}`, {
       method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        "Cookie": cookieHeader,
-      },
+      headers,
     });
 
     const data = await response.json();

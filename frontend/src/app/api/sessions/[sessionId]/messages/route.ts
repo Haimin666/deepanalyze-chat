@@ -14,9 +14,13 @@ function getTokenFromCookie(cookieHeader: string): string | null {
   return null;
 }
 
-// 获取会话列表
-export async function GET(request: NextRequest) {
+// 获取会话的消息列表
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ sessionId: string }> }
+) {
   try {
+    const { sessionId } = await params;
     const cookieHeader = request.headers.get("cookie") || "";
     const token = getTokenFromCookie(cookieHeader);
 
@@ -28,7 +32,7 @@ export async function GET(request: NextRequest) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${BACKEND_BASE_URL}/sessions`, {
+    const response = await fetch(`${BACKEND_BASE_URL}/sessions/${sessionId}/messages`, {
       method: "GET",
       headers,
     });
@@ -41,17 +45,21 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Proxy GET /sessions error:", error);
+    console.error("Proxy GET /sessions/[sessionId]/messages error:", error);
     return NextResponse.json(
-      { error: "获取会话列表失败" },
+      { error: "获取消息列表失败" },
       { status: 500 }
     );
   }
 }
 
-// 创建会话
-export async function POST(request: NextRequest) {
+// 保存消息到会话
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ sessionId: string }> }
+) {
   try {
+    const { sessionId } = await params;
     const body = await request.json();
     const cookieHeader = request.headers.get("cookie") || "";
     const token = getTokenFromCookie(cookieHeader);
@@ -64,7 +72,7 @@ export async function POST(request: NextRequest) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`${BACKEND_BASE_URL}/sessions`, {
+    const response = await fetch(`${BACKEND_BASE_URL}/sessions/${sessionId}/messages`, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
@@ -78,9 +86,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Proxy POST /sessions error:", error);
+    console.error("Proxy POST /sessions/[sessionId]/messages error:", error);
     return NextResponse.json(
-      { error: "创建会话失败" },
+      { error: "保存消息失败" },
       { status: 500 }
     );
   }
