@@ -44,7 +44,7 @@ CREATE DATABASE deepanalyze DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicod
 cd backend
 
 # 复制配置文件
-cp .env.example .env
+cp .env .env
 
 # 编辑 .env，配置数据库连接
 # DB_HOST=your_mysql_host

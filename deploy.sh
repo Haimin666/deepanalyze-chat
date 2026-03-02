@@ -70,7 +70,7 @@ init_database() {
     if [ ! -f "backend/.env" ]; then
         echo -e "${RED}✗ 未找到 backend/.env 配置文件${NC}"
         echo -e "${YELLOW}请复制 .env.example 并配置数据库信息${NC}"
-        cp backend/.env.example backend/.env
+        cp backend/.env backend/.env
         echo -e "${YELLOW}已创建 backend/.env，请编辑配置后重新运行${NC}"
         exit 1
     fi
