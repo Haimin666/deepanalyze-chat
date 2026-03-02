@@ -7,6 +7,7 @@ import io
 import base64
 import shutil
 import tempfile
+import urllib.request
 from pathlib import Path
 from typing import Generator, List, Optional, Dict, Any
 from datetime import datetime
@@ -224,6 +225,9 @@ class ChatService:
 class ReportService:
     """报告导出服务 - 生成 PDF 报告"""
 
+    # 缓存字体路径
+    _cached_font_path: Optional[str] = None
+
     def __init__(self, workspace_service):
         self.workspace_service = workspace_service
 
@@ -308,8 +312,31 @@ class ReportService:
             print(f"Failed to download image {url}: {e}")
         return None
 
+    def _download_chinese_font(self, font_dir: str) -> Optional[str]:
+        """下载中文字体"""
+        font_url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/SimplifiedChinese/NotoSansSC-Regular.otf"
+        font_path = os.path.join(font_dir, "NotoSansSC-Regular.otf")
+
+        if os.path.exists(font_path):
+            return font_path
+
+        try:
+            print(f"Downloading Chinese font to {font_path}...")
+            os.makedirs(font_dir, exist_ok=True)
+            urllib.request.urlretrieve(font_url, font_path)
+            print(f"Font downloaded successfully")
+            return font_path
+        except Exception as e:
+            print(f"Failed to download font: {e}")
+            return None
+
     def _find_chinese_font(self) -> Optional[str]:
         """查找可用的中文字体"""
+        # 使用缓存
+        if ReportService._cached_font_path:
+            if os.path.exists(ReportService._cached_font_path):
+                return ReportService._cached_font_path
+
         font_paths = [
             # Linux - WenQuanYi
             "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
@@ -320,7 +347,13 @@ class ReportService:
             "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
-            # Linux - DejaVu (fallback)
+            "/usr/share/fonts/noto/NotoSansSC-Regular.otf",
+            # Linux - Source Han
+            "/usr/share/fonts/adobe-source-han-sans/SourceHanSansSC-Regular.otf",
+            "/usr/share/fonts/truetype/source-han-sans/SourceHanSansSC-Regular.otf",
+            # Linux - Droid
+            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+            # Linux - DejaVu (fallback for some Chinese)
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             "/usr/share/fonts/dejavu/DejaVuSans.ttf",
             # Linux - Liberation
@@ -329,8 +362,9 @@ class ReportService:
             "/System/Library/Fonts/PingFang.ttc",
             "/System/Library/Fonts/STHeiti Light.ttc",
             "/System/Library/Fonts/Hiragino Sans GB.ttc",
-            "/Library/Fonts/Arial Unicode.ttf",
             "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+            # macOS user fonts
+            "/Library/Fonts/Arial Unicode.ttf",
             # Windows
             "C:\\Windows\\Fonts\\msyh.ttc",
             "C:\\Windows\\Fonts\\msyhbd.ttc",
@@ -338,11 +372,14 @@ class ReportService:
             "C:\\Windows\\Fonts\\simsun.ttc",
             "C:\\Windows\\Fonts\\simkai.ttf",
             "C:\\Windows\\Fonts\\STZHONGS.TTF",
+            # Windows 11
+            "C:\\Windows\\Fonts\\msyhl.ttc",
         ]
 
         for fp in font_paths:
             if os.path.exists(fp):
                 print(f"Found font: {fp}")
+                ReportService._cached_font_path = fp
                 return fp
 
         # 尝试使用 fc-list 查找字体
@@ -355,12 +392,21 @@ class ReportService:
             if result.returncode == 0 and result.stdout.strip():
                 fonts = result.stdout.strip().split("\n")
                 if fonts and fonts[0]:
-                    print(f"Found font via fc-list: {fonts[0]}")
-                    return fonts[0]
+                    font_path = fonts[0]
+                    print(f"Found font via fc-list: {font_path}")
+                    ReportService._cached_font_path = font_path
+                    return font_path
         except Exception as e:
             print(f"fc-list failed: {e}")
 
-        print("No Chinese font found!")
+        # 尝试下载字体
+        font_cache_dir = os.path.expanduser("~/.cache/deepanalyze/fonts")
+        downloaded_font = self._download_chinese_font(font_cache_dir)
+        if downloaded_font:
+            ReportService._cached_font_path = downloaded_font
+            return downloaded_font
+
+        print("WARNING: No Chinese font found, PDF may have encoding issues")
         return None
 
     def generate_pdf(
@@ -410,12 +456,23 @@ class ReportService:
 
             if chinese_font_path:
                 try:
-                    pdfmetrics.registerFont(TTFont("ChineseFont", chinese_font_path))
-                    font_name = "ChineseFont"
+                    # 尝试注册字体
+                    font_key = "ChineseFont"
+                    pdfmetrics.registerFont(TTFont(font_key, chinese_font_path))
+                    font_name = font_key
                     print(f"Successfully registered Chinese font: {chinese_font_path}")
                 except Exception as e:
                     print(f"Font registration failed: {e}")
-                    font_name = "Helvetica"
+                    # 尝试其他方式
+                    try:
+                        # 某些字体文件可能需要特殊处理
+                        font_key = "CNFont"
+                        pdfmetrics.registerFont(TTFont(font_key, chinese_font_path, subfontIndex=0))
+                        font_name = font_key
+                        print(f"Registered font with subfontIndex: {chinese_font_path}")
+                    except Exception as e2:
+                        print(f"Font registration with subfontIndex also failed: {e2}")
+                        font_name = "Helvetica"
             else:
                 print("WARNING: No Chinese font found, PDF may have encoding issues")
 
