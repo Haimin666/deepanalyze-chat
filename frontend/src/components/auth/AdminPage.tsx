@@ -40,9 +40,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Moon, Sun, Plus, Trash2, Pencil, ArrowLeft, Loader2, Users } from 'lucide-react';
-import { useAuthStore } from '@/lib/auth-store';
+import { useAuthStore, type User } from '@/lib/store';
 import { useTheme } from '@/components/three-panel/hooks/useTheme';
-import type { User } from '@/lib/auth-types';
+import { API_URLS } from '@/lib/config';
 
 interface AdminPageProps {
   onBack: () => void;
@@ -65,18 +65,22 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
   
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
   const { isDarkMode, toggleTheme, mounted } = useTheme();
 
   const loadUsers = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id || !token) return;
     
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/users?userId=${user.id}`);
+      const response = await fetch(`${API_URLS.USERS}?page=1&limit=100`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
       const data = await response.json();
       
-      if (data.success) {
+      if (data.users) {
         setUsers(data.users);
       }
     } catch (error) {
@@ -84,25 +88,25 @@ export function AdminPage({ onBack }: AdminPageProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, token]);
 
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
 
   const handleCreateUser = async () => {
-    if (!user?.id) return;
+    if (!user?.id || !token) return;
     if (!newUsername || !newName || !newPassword) return;
     
     setIsCreating(true);
     try {
-      const response = await fetch('/api/users', {
+      const response = await fetch(API_URLS.USERS, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          userId: user.id,
           username: newUsername,
           name: newName,
           password: newPassword,
@@ -112,14 +116,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
       
       const data = await response.json();
       
-      if (data.success) {
-        setUsers([...users, data.user]);
+      if (response.ok) {
+        setUsers([...users, data]);
         setNewUsername('');
         setNewName('');
         setNewPassword('');
         setNewRole('user');
       } else {
-        alert(data.error || '创建用户失败');
+        alert(data.detail || '创建用户失败');
       }
     } catch (error) {
       console.error('Failed to create user:', error);
@@ -130,17 +134,16 @@ export function AdminPage({ onBack }: AdminPageProps) {
   };
 
   const handleUpdateUser = async () => {
-    if (!user?.id || !editingUser) return;
+    if (!user?.id || !token || !editingUser) return;
     
     try {
-      const response = await fetch('/api/users', {
+      const response = await fetch(`${API_URLS.USERS}/${editingUser.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          adminId: user.id,
-          targetUserId: editingUser.id,
           name: editName,
           role: editRole,
         }),
@@ -148,11 +151,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
       
       const data = await response.json();
       
-      if (data.success) {
-        setUsers(users.map(u => u.id === editingUser.id ? data.user : u));
+      if (response.ok) {
+        setUsers(users.map(u => u.id === editingUser.id ? data : u));
         setEditingUser(null);
       } else {
-        alert(data.error || '更新用户失败');
+        alert(data.detail || '更新用户失败');
       }
     } catch (error) {
       console.error('Failed to update user:', error);
@@ -161,19 +164,22 @@ export function AdminPage({ onBack }: AdminPageProps) {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!user?.id) return;
+    if (!user?.id || !token) return;
     
     try {
-      const response = await fetch(`/api/users?adminId=${user.id}&userId=${userId}`, {
+      const response = await fetch(`${API_URLS.USERS}/${userId}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
       
       const data = await response.json();
       
-      if (data.success) {
+      if (response.ok) {
         setUsers(users.filter(u => u.id !== userId));
       } else {
-        alert(data.error || '删除用户失败');
+        alert(data.detail || '删除用户失败');
       }
     } catch (error) {
       console.error('Failed to delete user:', error);
