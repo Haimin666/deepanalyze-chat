@@ -23,6 +23,7 @@ export const API_URLS = {
   WORKSPACE_DELETE_DIR: `/api/workspace/dir`,
   WORKSPACE_UPLOAD_TO: `/api/workspace/upload-to`,
   WORKSPACE_CLEAR: `/api/workspace/clear`,
+  WORKSPACE_MOVE: `/api/workspace/move`,
   
   // 代理
   PROXY: `/api/proxy`,

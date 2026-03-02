@@ -295,15 +295,29 @@ export function ThreePanelInterface() {
   );
 
   // 创建新会话
-  const handleNewSession = useCallback(() => {
+  const handleNewSession = useCallback(async () => {
     if (isTyping) {
       toast({ description: "请等待当前响应完成", variant: "destructive" });
       return;
     }
 
-    // 创建新会话（只在内存中）
-    createNewSession();
+    // 创建新会话（在内存中）
+    const newSessionId = createNewSession();
     clearChat();
+
+    // 立即保存到后端
+    try {
+      await authFetch(API_URLS.SESSIONS, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: newSessionId,
+          title: "新会话",
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to create session in backend:", error);
+    }
 
     toast({ description: "已创建新会话" });
   }, [

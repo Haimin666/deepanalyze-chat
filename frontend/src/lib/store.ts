@@ -116,6 +116,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       isAuthenticated: true,
       user,
       lastActivity: Date.now(),
+      initialized: true, // 恢复会话时设置 initialized
     });
   },
 

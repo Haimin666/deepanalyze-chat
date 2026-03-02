@@ -18,6 +18,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const path = searchParams.get("path");
+    const sessionId = searchParams.get("session_id") || "default";
     const cookieHeader = request.headers.get("cookie") || "";
     const token = getTokenFromCookie(cookieHeader);
 
@@ -27,7 +28,7 @@ export async function DELETE(request: NextRequest) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const url = `${BACKEND_BASE_URL}/workspace/file${path ? `?path=${encodeURIComponent(path)}` : ''}`;
+    const url = `${BACKEND_BASE_URL}/workspace/file?path=${encodeURIComponent(path || "")}&session_id=${encodeURIComponent(sessionId)}`;
     const response = await fetch(url, {
       method: "DELETE",
       headers,

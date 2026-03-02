@@ -13,13 +13,13 @@ function getTokenFromCookie(cookieHeader: string): string | null {
   return null;
 }
 
-// 删除目录
-export async function DELETE(request: NextRequest) {
+// 移动文件/目录
+export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const path = searchParams.get("path");
+    const src = searchParams.get("src");
+    const dstDir = searchParams.get("dst_dir") || "";
     const sessionId = searchParams.get("session_id") || "default";
-    const recursive = searchParams.get("recursive") || "true";
     const cookieHeader = request.headers.get("cookie") || "";
     const token = getTokenFromCookie(cookieHeader);
 
@@ -29,9 +29,9 @@ export async function DELETE(request: NextRequest) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const url = `${BACKEND_BASE_URL}/workspace/dir?path=${encodeURIComponent(path || "")}&session_id=${encodeURIComponent(sessionId)}&recursive=${recursive}`;
+    const url = `${BACKEND_BASE_URL}/workspace/move?src=${encodeURIComponent(src || "")}&dst_dir=${encodeURIComponent(dstDir)}&session_id=${encodeURIComponent(sessionId)}`;
     const response = await fetch(url, {
-      method: "DELETE",
+      method: "POST",
       headers,
     });
 
@@ -43,9 +43,9 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Proxy DELETE /workspace/dir error:", error);
+    console.error("Proxy POST /workspace/move error:", error);
     return NextResponse.json(
-      { error: "删除目录失败" },
+      { error: "移动文件失败" },
       { status: 500 }
     );
   }

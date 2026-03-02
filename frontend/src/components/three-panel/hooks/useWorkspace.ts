@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { API_URLS, API_CONFIG, authFetch } from "@/lib/config";
+import { API_URLS, authFetch } from "@/lib/config";
 import { WorkspaceFile, WorkspaceNode, ArborNode } from "../types";
 
 /**
@@ -118,12 +118,11 @@ export function useWorkspace(sessionId: string) {
   // 移动文件/文件夹
   const moveToDir = useCallback(async (srcPath: string, dstDir: string) => {
     try {
-      const url = `${API_CONFIG.BACKEND_BASE_URL
-        }/workspace/move?src=${encodeURIComponent(
-          srcPath
-        )}&dst_dir=${encodeURIComponent(dstDir)}&session_id=${encodeURIComponent(
-          sessionId
-        )}`;
+      const url = `${API_URLS.WORKSPACE_MOVE}?src=${encodeURIComponent(
+        srcPath
+      )}&dst_dir=${encodeURIComponent(dstDir)}&session_id=${encodeURIComponent(
+        sessionId
+      )}`;
       const res = await authFetch(url, { method: "POST" });
       if (res.ok) {
         await loadWorkspaceTree();
