@@ -14,6 +14,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { MessageSquare, Trash2 } from "lucide-react";
+import { useState } from "react";
 import type { ChatSession } from "@/lib/store";
 
 type HistoryPanelProps = {
@@ -29,7 +30,10 @@ export function HistoryPanel({
   onSelectSession,
   onDeleteSession,
 }: HistoryPanelProps) {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState<string | null>(null);
+
   const formatDate = (dateStr: string) => {
+    if (!dateStr) return "";
     const date = new Date(dateStr);
     const now = new Date();
     const diffDays = Math.floor(
@@ -54,6 +58,11 @@ export function HistoryPanel({
         day: "numeric",
       });
     }
+  };
+
+  const handleDelete = (sessionId: string) => {
+    onDeleteSession(sessionId);
+    setDeleteDialogOpen(null);
   };
 
   return (
@@ -101,19 +110,24 @@ export function HistoryPanel({
                         {formatDate(session.updatedAt)}
                       </span>
                       <span className="text-xs text-gray-400 dark:text-gray-500">
-                        · {session.messageCount} 条消息
+                        · {session.messageCount || 0} 条消息
                       </span>
                     </div>
                   </div>
                   
-                  {/* 删除按钮 - 始终显示，悬浮时高亮 */}
-                  <AlertDialog>
+                  {/* 删除按钮 */}
+                  <AlertDialog open={deleteDialogOpen === session.id} onOpenChange={(open) => {
+                    if (!open) setDeleteDialogOpen(null);
+                  }}>
                     <AlertDialogTrigger asChild>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0 shrink-0 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteDialogOpen(session.id);
+                        }}
                         title="删除会话"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -132,7 +146,7 @@ export function HistoryPanel({
                           className="bg-red-600 hover:bg-red-700"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onDeleteSession(session.id);
+                            handleDelete(session.id);
                           }}
                         >
                           确认删除

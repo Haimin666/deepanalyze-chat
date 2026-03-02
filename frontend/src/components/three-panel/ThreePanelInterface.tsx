@@ -24,6 +24,7 @@ import {
 } from "@/lib/store";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { AdminPage } from "@/components/auth/AdminPage";
+import { Loader2 } from "lucide-react";
 
 // 直接从各个文件导入，避免循环依赖
 import { LeftPanel } from "./LeftPanel";
@@ -44,11 +45,11 @@ import { ensureGeneratedInUrl } from "./url-utils";
 import { UserAvatar } from "./UserAvatar";
 import type { Message } from "./types";
 
-type AppView = "login" | "main" | "admin";
+type AppView = "login" | "main" | "admin" | "loading";
 
 export function ThreePanelInterface() {
   const { toast } = useToast();
-  const [view, setView] = useState<AppView>("login");
+  const [view, setView] = useState<AppView>("loading");
 
   // Auth 状态
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -71,6 +72,7 @@ export function ThreePanelInterface() {
   const clearAllSessions = useSessionStore((state) => state.clearAllSessions);
   const hasMessages = useSessionStore((state) => state.hasMessages);
   const setHasMessages = useSessionStore((state) => state.setHasMessages);
+  const updateSession = useSessionStore((state) => state.updateSession);
 
   // Session 管理 - 获取初始 sessionId
   const { sessionId: initialSessionId, mounted } = useSession();
@@ -149,6 +151,12 @@ export function ThreePanelInterface() {
 
   // 检查登录状态和超时
   useEffect(() => {
+    // 未初始化完成时保持 loading 状态
+    if (!initialized) {
+      setView("loading");
+      return;
+    }
+
     if (isAuthenticated && currentUser) {
       const isTimeout = checkTimeout();
       if (isTimeout) {
@@ -176,7 +184,7 @@ export function ThreePanelInterface() {
         prevUserIdRef.current = null;
       }
     }
-  }, [isAuthenticated, currentUser, checkTimeout, toast, clearAllSessions, loadUserSessions]);
+  }, [initialized, isAuthenticated, currentUser, checkTimeout, toast, clearAllSessions, loadUserSessions]);
 
   // 活动检测 - 更新最后活动时间
   useEffect(() => {
@@ -659,6 +667,18 @@ export function ThreePanelInterface() {
   const userAvatarElement = (
     <UserAvatar onOpenAdmin={() => setView("admin")} />
   );
+
+  // 加载中页面
+  if (view === "loading") {
+    return (
+      <div className="min-h-screen bg-white dark:bg-black flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+          <p className="text-sm text-gray-500">加载中...</p>
+        </div>
+      </div>
+    );
+  }
 
   // 登录页面
   if (view === "login") {

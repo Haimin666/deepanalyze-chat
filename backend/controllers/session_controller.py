@@ -155,15 +155,26 @@ class SessionController:
         # 更新会话信息
         messages = db_service.get_messages_by_session(session_id)
         preview = content[:100] if len(content) > 100 else content
+        
+        # 如果是第一条用户消息，将会话标题设置为消息内容的前30个字符
+        title = None
+        if role == "user" and session.title == "新会话":
+            # 检查是否是第一条用户消息
+            user_messages = [m for m in messages if m.role == "user"]
+            if len(user_messages) == 1:
+                title = content[:30] + ("..." if len(content) > 30 else "")
+        
         db_service.update_session(
             session_id,
+            title=title,
             message_count=len(messages),
             preview=preview
         )
         
         return {
             "id": msg_id,
-            "success": True
+            "success": True,
+            "title": title
         }
 
     async def save_messages_batch(self, session_id: str, user_id: str, messages: List[dict]) -> dict:

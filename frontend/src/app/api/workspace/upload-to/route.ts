@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const dir = searchParams.get("dir") || "";
+    const sessionId = searchParams.get("session_id") || "";
     const cookieHeader = request.headers.get("cookie") || "";
     const token = getTokenFromCookie(cookieHeader);
 
@@ -30,7 +31,17 @@ export async function POST(request: NextRequest) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const url = `${BACKEND_BASE_URL}/workspace/upload-to${dir ? `?dir=${encodeURIComponent(dir)}` : ''}`;
+    // 构建完整的 URL，包含 dir 和 session_id
+    let url = `${BACKEND_BASE_URL}/workspace/upload-to`;
+    const params = new URLSearchParams();
+    if (dir) params.append("dir", dir);
+    if (sessionId) params.append("session_id", sessionId);
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+
+    console.log("[Upload API] Forwarding to:", url);
+
     const response = await fetch(url, {
       method: "POST",
       headers,
@@ -40,9 +51,11 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
 
     if (!response.ok) {
+      console.error("[Upload API] Error:", response.status, data);
       return NextResponse.json(data, { status: response.status });
     }
 
+    console.log("[Upload API] Success:", data);
     return NextResponse.json(data);
   } catch (error) {
     console.error("Proxy POST /workspace/upload-to error:", error);

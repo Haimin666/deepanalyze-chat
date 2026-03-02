@@ -47,6 +47,7 @@ export function useChat(
   // 从 store 获取方法
   const setHasMessages = useSessionStore((state) => state.setHasMessages);
   const updateSession = useSessionStore((state) => state.updateSession);
+  const sessions = useSessionStore((state) => state.sessions);
 
   // 保存消息到后端
   const saveMessageToBackend = useCallback(async (
@@ -66,9 +67,18 @@ export function useChat(
         return false;
       }
       
-      // 更新会话列表中的预览
+      const result = await response.json();
+      
+      // 更新会话列表中的预览和标题
       const preview = content.slice(0, 100);
-      updateSession(sessionId, { preview });
+      const updateData: { preview: string; title?: string } = { preview };
+      
+      // 如果后端返回了新标题，更新标题
+      if (result.title) {
+        updateData.title = result.title;
+      }
+      
+      updateSession(sessionId, updateData);
       
       return true;
     } catch (error) {
