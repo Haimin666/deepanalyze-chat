@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # 导入配置
-from config.settings import API_HOST, API_PORT
+from config.settings import API_HOST, API_PORT, USE_MOCK_LLM
 from config.database import DB_HOST, DB_NAME
 
 # 导入服务
@@ -38,7 +38,7 @@ from services.database_service import db_service
 # 导入控制器
 from controllers.workspace_controller import WorkspaceController
 from controllers.code_controller import CodeController
-from controllers.chat_controller import ChatController
+from controllers.chat_controller import ChatController, ReportController
 from controllers.proxy_controller import ProxyController
 
 # 导入路由
@@ -75,8 +75,13 @@ def create_app() -> FastAPI:
     # ========== 初始化控制器层 ==========
     workspace_controller = WorkspaceController(workspace_service)
     code_controller = CodeController(workspace_service)
-    chat_controller = ChatController(workspace_service, code_service)
+    chat_controller = ChatController(workspace_service, code_service, use_mock=USE_MOCK_LLM)
+    report_controller = ReportController(workspace_service)
     proxy_controller = ProxyController()
+    
+    # 打印 Mock 状态
+    if USE_MOCK_LLM:
+        print("🎭 Mock LLM 服务已启用 - 使用模拟响应")
 
     # ========== 创建 FastAPI 应用 ==========
     app = FastAPI(
@@ -107,7 +112,7 @@ def create_app() -> FastAPI:
     app.include_router(create_chat_router(chat_controller))
 
     # 报告导出路由
-    app.include_router(create_report_router(chat_controller))
+    app.include_router(create_report_router(report_controller))
 
     # 代理路由
     app.include_router(create_proxy_router(proxy_controller))

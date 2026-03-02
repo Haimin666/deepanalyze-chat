@@ -7,6 +7,9 @@ import os
 API_BASE = os.getenv("API_BASE", "http://localhost:8000/v1")
 MODEL_PATH = os.getenv("MODEL_PATH", "DeepAnalyze-8B")
 
+# Mock 服务配置 - 设置为 True 时使用模拟响应，无需真实 LLM
+USE_MOCK_LLM = os.getenv("USE_MOCK_LLM", "true").lower() == "true"
+
 # 工作区配置
 WORKSPACE_BASE_DIR = os.getenv("WORKSPACE_BASE_DIR", "workspace")
 
