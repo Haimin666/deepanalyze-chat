@@ -500,7 +500,89 @@ class ReportService:
         # --- 5. 生成 PDF ---
         errors = []
         
-        # Strategy 1: WeasyPrint
+        # Strategy 1: ReportLab (纯 Python，无系统依赖)
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
+            from reportlab.lib.units import cm
+            from reportlab.lib.enums import TA_LEFT
+            from reportlab.pdfbase import pdfmetrics
+            from reportlab.pdfbase.ttfonts import TTFont
+            
+            # 尝试注册中文字体
+            font_registered = False
+            font_paths = [
+                "/System/Library/Fonts/PingFang.ttc",
+                "/System/Library/Fonts/STHeiti Light.ttc",
+                "/Library/Fonts/Arial Unicode.ttf",
+                "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+                "C:\\Windows\\Fonts\\msyh.ttc",
+                "C:\\Windows\\Fonts\\simhei.ttf",
+            ]
+            
+            for fp in font_paths:
+                if os.path.exists(fp):
+                    try:
+                        pdfmetrics.registerFont(TTFont('ChineseFont', fp))
+                        font_registered = True
+                        break
+                    except Exception:
+                        continue
+            
+            doc = SimpleDocTemplate(str(pdf_path), pagesize=A4, 
+                                    leftMargin=2*cm, rightMargin=2*cm,
+                                    topMargin=2*cm, bottomMargin=2*cm)
+            
+            styles = getSampleStyleSheet()
+            if font_registered:
+                styles.add(ParagraphStyle(name='Chinese', fontName='ChineseFont', fontSize=11, leading=16))
+                normal_style = styles['Chinese']
+            else:
+                normal_style = styles['Normal']
+            
+            story = []
+            
+            # 简单处理 HTML 文本
+            import re
+            # 移除 HTML 标签，保留文本
+            plain_text = re.sub(r'<[^>]+>', '', html_body)
+            plain_text = plain_text.replace('&nbsp;', ' ')
+            plain_text = plain_text.replace('&amp;', '&')
+            plain_text = plain_text.replace('&lt;', '<')
+            plain_text = plain_text.replace('&gt;', '>')
+            
+            for line in plain_text.split('\n'):
+                if line.strip():
+                    try:
+                        story.append(Paragraph(line, normal_style))
+                    except Exception:
+                        story.append(Paragraph(line.encode('utf-8', errors='ignore').decode('utf-8'), normal_style))
+                    story.append(Spacer(1, 0.3*cm))
+            
+            # 添加图片
+            for fname, img_path in all_images.items():
+                try:
+                    img = RLImage(str(img_path), width=15*cm, height=10*cm)
+                    img.hAlign = 'CENTER'
+                    story.append(img)
+                    story.append(Spacer(1, 0.5*cm))
+                except Exception as e:
+                    print(f"Failed to add image {fname}: {e}")
+            
+            doc.build(story)
+            print(f"PDF generated successfully via ReportLab: {pdf_path}")
+            return pdf_path, None
+            
+        except ImportError:
+            errors.append("缺少 reportlab 库")
+        except Exception as e:
+            errors.append(f"ReportLab 失败: {str(e)}")
+            print(f"[PDF Warning] ReportLab failed: {e}")
+
+        # Strategy 2: WeasyPrint
         try:
             from weasyprint import HTML, CSS
             css = CSS(string="""
@@ -518,12 +600,12 @@ class ReportService:
             return pdf_path, None
         
         except ImportError:
-            errors.append("缺少 weasyprint 库")
+            errors.append("缺少 weasyprint 库 (需要安装 pango: brew install pango gdk-pixbuf libffi)")
         except Exception as e:
             errors.append(f"WeasyPrint 失败: {str(e)}")
             print(f"[PDF Warning] WeasyPrint failed: {e}")
 
-        # Strategy 2: xhtml2pdf Fallback
+        # Strategy 3: xhtml2pdf Fallback
         try:
             from xhtml2pdf import pisa
             with open(pdf_path, "wb") as pdf_file:
@@ -539,7 +621,7 @@ class ReportService:
             errors.append(f"xhtml2pdf 失败: {str(e)}")
             print(f"[PDF Error] xhtml2pdf failed: {e}")
 
-        error_msg = "PDF 生成失败: " + "; ".join(errors)
+        error_msg = "PDF 生成失败: " + "; ".join(errors) + "\n\n提示: macOS 请运行 'brew install pango gdk-pixbuf libffi' 安装依赖"
         return None, error_msg
 
     def generate_pdf(
