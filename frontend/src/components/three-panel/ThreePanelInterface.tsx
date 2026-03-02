@@ -245,6 +245,7 @@ export function ThreePanelInterface() {
     messagesEndRef,
     clearChat,
     handleSendMessage,
+    stopGeneration,
     scrollToBottom,
     loadSessionMessages,
   } = useChat(
@@ -704,6 +705,7 @@ export function ThreePanelInterface() {
               userAvatar={userAvatarElement}
               onInputChange={setInputValue}
               onSendMessage={handleSendMessage}
+              onStopGeneration={stopGeneration}
               onToggleTheme={toggleTheme}
               onToggleAutoCollapse={toggleAutoCollapse}
               onClearChat={clearChat}

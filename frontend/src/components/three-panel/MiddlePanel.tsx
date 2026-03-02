@@ -22,7 +22,7 @@ import {
   Sun,
   Eraser,
   Paperclip,
-  RefreshCw,
+  Square,
   PlusSquare,
 } from "lucide-react";
 import { Message } from "./types";
@@ -44,6 +44,7 @@ type MiddlePanelProps = {
   userAvatar: React.ReactNode;
   onInputChange: (value: string) => void;
   onSendMessage: () => void;
+  onStopGeneration: () => void;
   onToggleTheme: () => void;
   onToggleAutoCollapse: (enabled: boolean) => void;
   onClearChat: () => void;
@@ -67,6 +68,7 @@ export function MiddlePanel({
   userAvatar,
   onInputChange,
   onSendMessage,
+  onStopGeneration,
   onToggleTheme,
   onToggleAutoCollapse,
   onClearChat,
@@ -85,7 +87,7 @@ export function MiddlePanel({
             {isTyping && (
               <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                 <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                <span>执行中…</span>
+                <span>生成中…</span>
               </div>
             )}
           </div>
@@ -236,12 +238,13 @@ export function MiddlePanel({
           </AlertDialog>
           {isTyping ? (
             <Button
+              onClick={onStopGeneration}
               size="sm"
-              className="h-9 w-9 p-0 rounded-full bg-white text-black border border-blue-400/50 dark:bg-white dark:text-black"
-              title="正在生成…"
-              disabled
+              className="h-9 px-3 rounded-lg bg-red-500 hover:bg-red-600 text-white"
+              title="停止生成"
             >
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <Square className="h-4 w-4 mr-1" />
+              停止
             </Button>
           ) : (
             <Button

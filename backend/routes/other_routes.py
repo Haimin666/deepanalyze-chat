@@ -40,6 +40,21 @@ def create_chat_router(controller: ChatController) -> APIRouter:
         """聊天补全（流式）"""
         return await controller.chat_completions(body, user.id)
 
+    @router.post("/chat/stop")
+    async def stop_stream(
+        body: dict = Body(...),
+        user: User = Depends(auth_controller.get_current_user)
+    ):
+        """停止流式响应"""
+        return await controller.stop_stream(body)
+
+    @router.post("/chat/stream-session")
+    async def create_stream_session(
+        user: User = Depends(auth_controller.get_current_user)
+    ):
+        """创建新的流式会话ID"""
+        return await controller.create_stream_session()
+
     return router
 
 

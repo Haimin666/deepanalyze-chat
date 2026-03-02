@@ -36,6 +36,11 @@ export function useChat(
   const stickToBottomRef = useRef(true);
   const aiPendingContentRef = useRef<string>("");
   const streamRafRef = useRef<number | null>(null);
+  
+  // 流式会话ID，用于停止功能
+  const streamSessionIdRef = useRef<string | null>(null);
+  // AbortController 用于取消请求
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // 从 store 获取方法
   const setHasMessages = useSessionStore((state) => state.setHasMessages);
@@ -129,6 +134,38 @@ export function useChat(
     setHasMessages(sessionMessages.some((m) => !m.localOnly));
   }, [setHasMessages]);
 
+  // 停止生成
+  const stopGeneration = useCallback(async () => {
+    // 1. 取消前端请求
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    // 2. 通知后端停止
+    if (streamSessionIdRef.current) {
+      try {
+        await authFetch(API_URLS.CHAT_STOP, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stream_session_id: streamSessionIdRef.current }),
+        });
+      } catch (e) {
+        console.error("Failed to notify backend to stop:", e);
+      }
+      streamSessionIdRef.current = null;
+    }
+
+    // 3. 清理前端状态
+    if (streamRafRef.current) {
+      cancelAnimationFrame(streamRafRef.current);
+      streamRafRef.current = null;
+    }
+
+    setIsTyping(false);
+    setStreamingMessageId(null);
+  }, []);
+
   // 发送消息
   const handleSendMessage = useCallback(async () => {
     if (!inputValue.trim()) return;
@@ -146,7 +183,14 @@ export function useChat(
     setInputValue("");
     setIsTyping(true);
 
+    // 创建新的 AbortController
+    abortControllerRef.current = new AbortController();
+
     try {
+      // 创建流式会话ID
+      let streamSessionId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      streamSessionIdRef.current = streamSessionId;
+
       const response = await authFetch(API_URLS.CHAT_COMPLETIONS, {
         method: "POST",
         headers: {
@@ -168,7 +212,9 @@ export function useChat(
           ],
           stream: true,
           session_id: sessionId,
+          stream_session_id: streamSessionId,
         }),
+        signal: abortControllerRef.current.signal,
       });
 
       const contentType = response.headers.get("content-type") || "";
@@ -319,8 +365,13 @@ export function useChat(
       setIsTyping(false);
       setStreamingMessageId(null);
 
-    } catch (error) {
-      console.error("Error sending message:", error);
+    } catch (error: unknown) {
+      // 如果是用户主动取消，不显示错误
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Request aborted by user");
+      } else {
+        console.error("Error sending message:", error);
+      }
       setIsTyping(false);
       setStreamingMessageId(null);
     }
@@ -339,6 +390,7 @@ export function useChat(
     stickToBottomRef,
     clearChat,
     handleSendMessage,
+    stopGeneration,
     scrollToBottom,
     loadSessionMessages,
     getPrevUserQuestionText: (index: number) => getPrevUserQuestionText(messages, index),

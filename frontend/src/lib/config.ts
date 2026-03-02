@@ -69,6 +69,8 @@ export async function authFetch(
 export const API_URLS = {
   // 聊天相关
   CHAT_COMPLETIONS: `${BACKEND_BASE_URL}/chat/completions`,
+  CHAT_STOP: `${BACKEND_BASE_URL}/chat/stop`,
+  CHAT_STREAM_SESSION: `${BACKEND_BASE_URL}/chat/stream-session`,
   
   // 报告导出
   EXPORT_REPORT: `${BACKEND_BASE_URL}/export/report`,
