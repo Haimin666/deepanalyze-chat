@@ -10,9 +10,17 @@ Three Panel Interface - Backend API
 """
 import os
 import sys
+from pathlib import Path
 
 # 设置 matplotlib 后端
 os.environ.setdefault("MPLBACKEND", "Agg")
+
+# 加载 .env 环境变量文件
+from dotenv import load_dotenv
+env_path = Path(__file__).parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+    print(f"✅ 已加载环境配置: {env_path}")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
