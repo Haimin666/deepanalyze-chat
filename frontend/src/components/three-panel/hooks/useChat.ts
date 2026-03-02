@@ -16,7 +16,7 @@ const WELCOME_MESSAGE: Message = {
 
 /**
  * 聊天管理 Hook
- * 消息从后端 API 获取，不保存到本地
+ * 消息会保存到后端数据库
  */
 export function useChat(
   sessionId: string,
@@ -41,9 +41,70 @@ export function useChat(
   const streamSessionIdRef = useRef<string | null>(null);
   // AbortController 用于取消请求
   const abortControllerRef = useRef<AbortController | null>(null);
+  // 标记是否已保存过消息，避免重复保存
+  const savedMessagesRef = useRef<Set<string>>(new Set());
 
   // 从 store 获取方法
   const setHasMessages = useSessionStore((state) => state.setHasMessages);
+  const updateSession = useSessionStore((state) => state.updateSession);
+
+  // 保存消息到后端
+  const saveMessageToBackend = useCallback(async (
+    sessionId: string,
+    role: "user" | "assistant",
+    content: string
+  ) => {
+    try {
+      const response = await authFetch(API_URLS.SESSION_MESSAGES(sessionId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role, content }),
+      });
+      
+      if (!response.ok) {
+        console.error("Failed to save message to backend:", await response.text());
+        return false;
+      }
+      
+      // 更新会话列表中的预览
+      const preview = content.slice(0, 100);
+      updateSession(sessionId, { preview });
+      
+      return true;
+    } catch (error) {
+      console.error("Error saving message to backend:", error);
+      return false;
+    }
+  }, [updateSession]);
+
+  // 确保会话存在于后端
+  const ensureSessionExists = useCallback(async (sessionId: string) => {
+    try {
+      // 先检查会话是否存在
+      const checkResponse = await authFetch(`${API_URLS.SESSIONS}/${sessionId}`, {
+        method: "GET",
+      });
+      
+      if (checkResponse.ok) {
+        return true; // 会话已存在
+      }
+      
+      // 会话不存在，创建新会话
+      const createResponse = await authFetch(API_URLS.SESSIONS, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          id: sessionId, 
+          title: "新会话" 
+        }),
+      });
+      
+      return createResponse.ok;
+    } catch (error) {
+      console.error("Error ensuring session exists:", error);
+      return false;
+    }
+  }, []);
 
   // 节流滚动到底部
   const scrollToBottom = useCallback((force: boolean = false) => {
@@ -104,6 +165,7 @@ export function useChat(
     };
     setMessages([welcome]);
     setHasMessages(false);
+    savedMessagesRef.current.clear();
   }, [sessionId, setHasMessages]);
 
   // 更新 hasMessages 状态
@@ -126,12 +188,20 @@ export function useChat(
     };
     setMessages([welcome]);
     setHasMessages(false);
+    savedMessagesRef.current.clear();
   }, [isTyping, setHasMessages]);
 
   // 加载指定会话的消息（从后端加载）
   const loadSessionMessages = useCallback((sessionMessages: Message[]) => {
     setMessages(sessionMessages);
     setHasMessages(sessionMessages.some((m) => !m.localOnly));
+    savedMessagesRef.current.clear();
+    // 标记已加载的消息为已保存
+    sessionMessages.forEach((m) => {
+      if (!m.localOnly) {
+        savedMessagesRef.current.add(m.id);
+      }
+    });
   }, [setHasMessages]);
 
   // 停止生成
@@ -172,14 +242,16 @@ export function useChat(
     const baseMessageIndex = messages.length;
     const aiMessageIndex = baseMessageIndex + 1;
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
+    const userMessageId = Date.now().toString();
+    const userMessage: Message = {
+      id: userMessageId,
       content: inputValue,
       sender: "user",
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, newMessage]);
+    setMessages((prev) => [...prev, userMessage]);
+    const userContent = inputValue; // 保存用户消息内容
     setInputValue("");
     setIsTyping(true);
 
@@ -187,6 +259,15 @@ export function useChat(
     abortControllerRef.current = new AbortController();
 
     try {
+      // 确保会话存在于后端
+      await ensureSessionExists(sessionId);
+      
+      // 保存用户消息到后端
+      if (!savedMessagesRef.current.has(userMessageId)) {
+        await saveMessageToBackend(sessionId, "user", userContent);
+        savedMessagesRef.current.add(userMessageId);
+      }
+
       // 创建流式会话ID
       let streamSessionId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       streamSessionIdRef.current = streamSessionId;
@@ -207,7 +288,7 @@ export function useChat(
               })),
             {
               role: "user",
-              content: inputValue,
+              content: userContent,
             },
           ],
           stream: true,
@@ -227,15 +308,21 @@ export function useChat(
       if (contentType.includes("application/json")) {
         const data = await response.json();
         const content = data?.choices?.[0]?.message?.content || "";
+        const aiMsgId = Date.now().toString();
         setMessages((prev) => [
           ...prev,
           {
-            id: Date.now().toString(),
+            id: aiMsgId,
             sender: "ai",
             content,
             timestamp: new Date(),
           },
         ]);
+        
+        // 保存 AI 消息到后端
+        await saveMessageToBackend(sessionId, "assistant", content);
+        savedMessagesRef.current.add(aiMsgId);
+        
         autoCollapseForContent(content, aiMessageIndex);
         if (content.includes("<File>")) {
           await onLoadWorkspaceTree();
@@ -360,6 +447,12 @@ export function useChat(
       flushAiMessage(accumulatedMessage);
       autoCollapseForContent(accumulatedMessage, aiMessageIndex);
 
+      // 保存 AI 消息到后端
+      if (accumulatedMessage && !savedMessagesRef.current.has(aiMsgId)) {
+        await saveMessageToBackend(sessionId, "assistant", accumulatedMessage);
+        savedMessagesRef.current.add(aiMsgId);
+      }
+
       await onLoadWorkspaceFiles();
       await onLoadWorkspaceTree();
       setIsTyping(false);
@@ -375,7 +468,7 @@ export function useChat(
       setIsTyping(false);
       setStreamingMessageId(null);
     }
-  }, [inputValue, messages, sessionId, onLoadWorkspaceFiles, onLoadWorkspaceTree, autoCollapseForContent]);
+  }, [inputValue, messages, sessionId, onLoadWorkspaceFiles, onLoadWorkspaceTree, autoCollapseForContent, ensureSessionExists, saveMessageToBackend]);
 
   return {
     messages,
