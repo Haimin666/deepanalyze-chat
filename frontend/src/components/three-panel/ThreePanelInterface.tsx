@@ -56,6 +56,10 @@ export function ThreePanelInterface() {
   const logout = useAuthStore((state) => state.logout);
   const checkTimeout = useAuthStore((state) => state.checkTimeout);
   const updateActivity = useAuthStore((state) => state.updateActivity);
+  const restoreSession = useAuthStore((state) => state.restoreSession);
+  const setSessionTimeout = useAuthStore((state) => state.setSessionTimeout);
+  const initialized = useAuthStore((state) => state.initialized);
+  const setInitialized = useAuthStore((state) => state.setInitialized);
 
   // 会话历史状态 - 纯内存
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -86,6 +90,40 @@ export function ThreePanelInterface() {
 
   // 用户变化时重新加载数据
   const prevUserIdRef = useRef<string | null>(null);
+
+  // 初始化：从 cookie 恢复登录状态
+  useEffect(() => {
+    if (initialized) return;
+
+    const initAuth = async () => {
+      try {
+        // 1. 获取配置的超时时间
+        const configRes = await fetch('/api/auth/config');
+        if (configRes.ok) {
+          const config = await configRes.json();
+          if (config.sessionTimeoutMinutes) {
+            setSessionTimeout(config.sessionTimeoutMinutes);
+          }
+        }
+
+        // 2. 尝试从 cookie 恢复登录状态
+        const meRes = await fetch('/api/auth/me', {
+          credentials: 'include',
+        });
+
+        if (meRes.ok) {
+          const user = await meRes.json();
+          restoreSession(user);
+        }
+      } catch (error) {
+        console.error('Failed to restore session:', error);
+      } finally {
+        setInitialized(true);
+      }
+    };
+
+    initAuth();
+  }, [initialized, restoreSession, setSessionTimeout, setInitialized]);
 
   // 从后端加载用户的会话列表
   const loadUserSessions = useCallback(async () => {

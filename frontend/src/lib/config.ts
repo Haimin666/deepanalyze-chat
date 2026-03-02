@@ -35,6 +35,7 @@ export const API_URLS = {
   
   // 用户管理
   USERS: `/api/users`,
+  USER_RESET_PASSWORD: (userId: string) => `/api/users/${userId}/reset-password`,
   
   // 会话管理
   SESSIONS: `/api/sessions`,

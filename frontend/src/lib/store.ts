@@ -1,6 +1,6 @@
 /**
  * Zustand 状态管理 Store
- * 纯内存状态，所有动态数据从后端 API 获取
+ * 支持从 cookie 恢复登录状态
  */
 import { create } from "zustand";
 
@@ -39,10 +39,14 @@ interface AuthState {
   token: string | null;
   lastActivity: number;
   sessionTimeout: number; // 毫秒
+  initialized: boolean; // 是否已初始化
   login: (user: User, token: string) => void;
   logout: () => void;
   checkTimeout: () => boolean;
   updateActivity: () => void;
+  setSessionTimeout: (minutes: number) => void;
+  restoreSession: (user: User) => void;
+  setInitialized: (initialized: boolean) => void;
 }
 
 // 会话状态接口 - 纯内存，不持久化
@@ -60,13 +64,14 @@ interface SessionState {
   clearAllSessions: () => void;
 }
 
-// 认证 Store - 纯内存状态
+// 认证 Store - 支持从 cookie 恢复
 export const useAuthStore = create<AuthState>()((set, get) => ({
   isAuthenticated: false,
   user: null,
   token: null,
   lastActivity: Date.now(),
-  sessionTimeout: 30 * 60 * 1000, // 30 分钟
+  sessionTimeout: 10 * 60 * 1000, // 默认 10 分钟
+  initialized: false,
 
   login: (user, token) => {
     set({
@@ -74,6 +79,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       user,
       token,
       lastActivity: Date.now(),
+      initialized: true,
     });
   },
 
@@ -98,6 +104,22 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   updateActivity: () => {
     set({ lastActivity: Date.now() });
+  },
+
+  setSessionTimeout: (minutes: number) => {
+    set({ sessionTimeout: minutes * 60 * 1000 });
+  },
+
+  restoreSession: (user: User) => {
+    set({
+      isAuthenticated: true,
+      user,
+      lastActivity: Date.now(),
+    });
+  },
+
+  setInitialized: (initialized: boolean) => {
+    set({ initialized });
   },
 }));
 

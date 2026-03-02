@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Body, Depends, Header
 from typing import Optional
 
+from config.database import SESSION_TIMEOUT_MINUTES
 from controllers.auth_controller import AuthController, UserController
 from controllers.session_controller import SessionController
 from models.workspace import LoginRequest, LoginResponse, User, SessionCreate, ChatSession
@@ -37,6 +38,13 @@ def create_auth_router() -> APIRouter:
     ):
         """修改密码"""
         return await auth_controller.change_password(user.id, old_password, new_password)
+
+    @router.get("/config")
+    async def get_config():
+        """获取认证配置（公开接口）"""
+        return {
+            "sessionTimeoutMinutes": SESSION_TIMEOUT_MINUTES
+        }
 
     return router
 

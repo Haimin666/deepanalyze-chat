@@ -39,10 +39,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Moon, Sun, Plus, Trash2, Pencil, ArrowLeft, Loader2, Users } from 'lucide-react';
+import { Moon, Sun, Plus, Trash2, Pencil, ArrowLeft, Loader2, Users, KeyRound } from 'lucide-react';
 import { useAuthStore, type User } from '@/lib/store';
 import { useTheme } from '@/components/three-panel/hooks/useTheme';
-import { API_URLS } from '@/lib/config';
+import { API_URLS, authFetch } from '@/lib/config';
 
 interface AdminPageProps {
   onBack: () => void;
@@ -54,30 +54,28 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
+  const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
   
   // New user form
   const [newUsername, setNewUsername] = useState('');
   const [newName, setNewName] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
   const [newRole, setNewRole] = useState<'admin' | 'user'>('user');
   
   // Edit user form
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
   
-  const { user, token } = useAuthStore();
+  const { user } = useAuthStore();
   const { isDarkMode, toggleTheme, mounted } = useTheme();
 
   const loadUsers = useCallback(async () => {
-    if (!user?.id || !token) return;
+    if (!user?.id) return;
     
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URLS.USERS}?page=1&limit=100`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const response = await authFetch(`${API_URLS.USERS}?page=1&limit=100`);
       const data = await response.json();
       
       if (data.users) {
@@ -88,28 +86,27 @@ export function AdminPage({ onBack }: AdminPageProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id, token]);
+  }, [user?.id]);
 
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
 
   const handleCreateUser = async () => {
-    if (!user?.id || !token) return;
-    if (!newUsername || !newName || !newPassword) return;
+    if (!user?.id) return;
+    if (!newUsername || !newName || !newPasswordInput) return;
     
     setIsCreating(true);
     try {
-      const response = await fetch(API_URLS.USERS, {
+      const response = await authFetch(API_URLS.USERS, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           username: newUsername,
           name: newName,
-          password: newPassword,
+          password: newPasswordInput,
           role: newRole,
         }),
       });
@@ -120,7 +117,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         setUsers([...users, data]);
         setNewUsername('');
         setNewName('');
-        setNewPassword('');
+        setNewPasswordInput('');
         setNewRole('user');
       } else {
         alert(data.detail || '创建用户失败');
@@ -134,16 +131,16 @@ export function AdminPage({ onBack }: AdminPageProps) {
   };
 
   const handleUpdateUser = async () => {
-    if (!user?.id || !token || !editingUser) return;
+    if (!user?.id || !editingUser) return;
     
     try {
-      const response = await fetch(`${API_URLS.USERS}/${editingUser.id}`, {
+      const response = await authFetch(`${API_URLS.USERS}/${editingUser.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
+          targetUserId: editingUser.id,
           name: editName,
           role: editRole,
         }),
@@ -164,14 +161,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!user?.id || !token) return;
+    if (!user?.id) return;
     
     try {
-      const response = await fetch(`${API_URLS.USERS}/${userId}`, {
+      const response = await authFetch(`${API_URLS.USERS}/${userId}?userId=${userId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
       });
       
       const data = await response.json();
@@ -186,6 +180,33 @@ export function AdminPage({ onBack }: AdminPageProps) {
       alert('删除用户失败');
     } finally {
       setDeleteUserId(null);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!user?.id || !resetPasswordUserId || !newPassword) return;
+    
+    try {
+      const response = await authFetch(API_URLS.USER_RESET_PASSWORD(resetPasswordUserId), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ new_password: newPassword }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setResetPasswordUserId(null);
+        setNewPassword('');
+        alert('密码重置成功');
+      } else {
+        alert(data.detail || '重置密码失败');
+      }
+    } catch (error) {
+      console.error('Failed to reset password:', error);
+      alert('重置密码失败');
     }
   };
 
@@ -277,8 +298,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     id="new-password"
                     type="password"
                     placeholder="请输入密码"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    value={newPasswordInput}
+                    onChange={(e) => setNewPasswordInput(e.target.value)}
                     className="bg-white dark:bg-black"
                   />
                 </div>
@@ -296,24 +317,20 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </div>
               </div>
               <DialogFooter>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button 
-                      onClick={handleCreateUser}
-                      disabled={!newUsername || !newName || !newPassword || isCreating}
-                      className="bg-black text-white dark:bg-white dark:text-black"
-                    >
-                      {isCreating ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          创建中...
-                        </>
-                      ) : (
-                        '创建用户'
-                      )}
-                    </Button>
-                  </DialogTrigger>
-                </Dialog>
+                <Button 
+                  onClick={handleCreateUser}
+                  disabled={!newUsername || !newName || !newPasswordInput || isCreating}
+                  className="bg-black text-white dark:bg-white dark:text-black"
+                >
+                  {isCreating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      创建中...
+                    </>
+                  ) : (
+                    '创建用户'
+                  )}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -354,6 +371,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {/* 重置密码 */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setResetPasswordUserId(tableUser.id)}
+                            className="h-8 w-8 p-0"
+                            title="重置密码"
+                            disabled={tableUser.id === user?.id}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </Button>
+                          {/* 编辑 */}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -363,6 +392,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
+                          {/* 删除 */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
@@ -444,6 +474,46 @@ export function AdminPage({ onBack }: AdminPageProps) {
               className="bg-black text-white dark:bg-white dark:text-black"
             >
               保存更改
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetPasswordUserId} onOpenChange={(open) => !open && setResetPasswordUserId(null)}>
+        <DialogContent className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
+          <DialogHeader>
+            <DialogTitle>重置密码</DialogTitle>
+            <DialogDescription>
+              为用户设置新密码。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reset-password">新密码</Label>
+              <Input
+                id="reset-password"
+                type="password"
+                placeholder="请输入新密码"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="bg-white dark:bg-black"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setResetPasswordUserId(null);
+              setNewPassword('');
+            }}>
+              取消
+            </Button>
+            <Button 
+              onClick={handleResetPassword}
+              disabled={!newPassword}
+              className="bg-black text-white dark:bg-white dark:text-black"
+            >
+              确认重置
             </Button>
           </DialogFooter>
         </DialogContent>
