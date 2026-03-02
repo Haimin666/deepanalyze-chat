@@ -438,16 +438,16 @@ class ReportService:
         base_name: str, 
         workspace_dir: str,
         export_dir: str
-    ) -> Optional[Path]:
+    ) -> tuple:
         """
         使用 md->html->pdf 方式生成 PDF
-        参考 /home/z/my-project/upload/utils.py 中的 save_pdf_report 函数
+        返回 (pdf_path, error_message) 元组
         """
+        # 检查 markdown 库
         try:
             import markdown
         except ImportError:
-            print("Warning: 'markdown' library not installed. PDF generation skipped.")
-            return None
+            return None, "PDF 生成失败: 缺少 markdown 库，请运行 pip install markdown"
 
         Path(export_dir).mkdir(parents=True, exist_ok=True)
         pdf_path = uniquify_path(Path(export_dir) / f"{base_name}.pdf")
@@ -498,6 +498,8 @@ class ReportService:
         )
 
         # --- 5. 生成 PDF ---
+        errors = []
+        
         # Strategy 1: WeasyPrint
         try:
             from weasyprint import HTML, CSS
@@ -513,9 +515,12 @@ class ReportService:
             """)
             HTML(string=html_body, base_url=str(workspace_dir)).write_pdf(str(pdf_path), stylesheets=[css])
             print(f"PDF generated successfully via WeasyPrint: {pdf_path}")
-            return pdf_path
+            return pdf_path, None
         
+        except ImportError:
+            errors.append("缺少 weasyprint 库")
         except Exception as e:
+            errors.append(f"WeasyPrint 失败: {str(e)}")
             print(f"[PDF Warning] WeasyPrint failed: {e}")
 
         # Strategy 2: xhtml2pdf Fallback
@@ -525,11 +530,17 @@ class ReportService:
                 pisa_status = pisa.CreatePDF(html_body, dest=pdf_file, encoding='utf-8')
             if not pisa_status.err:
                 print(f"PDF generated successfully via xhtml2pdf: {pdf_path}")
-                return pdf_path
+                return pdf_path, None
+            else:
+                errors.append("xhtml2pdf 生成错误")
+        except ImportError:
+            errors.append("缺少 xhtml2pdf 库")
         except Exception as e:
+            errors.append(f"xhtml2pdf 失败: {str(e)}")
             print(f"[PDF Error] xhtml2pdf failed: {e}")
 
-        return None
+        error_msg = "PDF 生成失败: " + "; ".join(errors)
+        return None, error_msg
 
     def generate_pdf(
         self,
@@ -539,8 +550,10 @@ class ReportService:
         export_dir: str,
         session_id: str,
         user_id: str = "default"
-    ) -> Optional[Path]:
-        """生成 PDF 报告，使用 md->html->pdf 方式"""
+    ) -> tuple:
+        """生成 PDF 报告，使用 md->html->pdf 方式
+        返回 (pdf_path, error_message) 元组
+        """
         workspace_dir = self.workspace_service.get_session_workspace(session_id, user_id)
         return self._save_pdf_via_html(md_text, base_name, workspace_dir, export_dir)
 
@@ -569,7 +582,7 @@ class ReportService:
         md_path = self.save_md(md_text, base_name, export_dir)
 
         # 生成 PDF (使用 md->html->pdf 方式)
-        pdf_path = self.generate_pdf(
+        pdf_path, pdf_error = self.generate_pdf(
             md_text, images, base_name, export_dir, session_id, user_id
         )
 
@@ -590,6 +603,9 @@ class ReportService:
             result["download_urls"]["pdf"] = self.workspace_service.build_download_url(
                 f"{user_id}/{session_id}/generated/{pdf_path.name}"
             )
+        else:
+            # 返回具体的错误信息
+            result["error"] = pdf_error or "PDF 生成失败"
 
         print(f"Export result: {result}")
         return result

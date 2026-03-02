@@ -113,7 +113,17 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
 
   createNewSession: () => {
     const newId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    set({ currentSessionId: newId, hasMessages: false });
+    const newSession: ChatSession = {
+      id: newId,
+      title: "新会话",
+      messageCount: 0,
+      updatedAt: new Date().toISOString(),
+    };
+    set((state) => ({ 
+      currentSessionId: newId, 
+      hasMessages: false,
+      sessions: [newSession, ...state.sessions],
+    }));
     return newId;
   },
 
