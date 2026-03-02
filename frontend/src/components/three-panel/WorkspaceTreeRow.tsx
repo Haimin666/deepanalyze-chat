@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { FolderOpen, Code2, Sparkles, X, Trash2 } from "lucide-react";
+import { FolderOpen, Code2, Sparkles, X, Trash2, Download } from "lucide-react";
 import { ArborNode } from "./types";
 import { getExt, formatFileSize } from "./utils";
 
@@ -47,6 +47,24 @@ export const WorkspaceTreeRow = ({
   const isGenerated = data.isGenerated || false;
   const isGeneratedFolder = isDir && data.name === "generated";
   const ext = getExt(data.name, data.extension);
+
+  // 处理删除确认
+  const handleDeleteConfirm = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (onDeleteFile) {
+      onDeleteFile(data.id, isDir);
+    }
+  };
+
+  // 处理下载
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (data.download_url) {
+      onDownloadFile(data.name, data.download_url);
+    }
+  };
 
   return (
     <div style={style}>
@@ -99,13 +117,6 @@ export const WorkspaceTreeRow = ({
             return;
           }
           onOpenNode(data);
-        }}
-        onDoubleClick={(e) => {
-          if (isDir) return;
-          e.stopPropagation();
-          if (data.download_url) {
-            onDownloadFile(data.name, data.download_url);
-          }
         }}
         onContextMenu={(e) => onContextMenu(e as any, data)}
         onDragOver={(e) => {
@@ -177,22 +188,60 @@ export const WorkspaceTreeRow = ({
           )}
         </div>
 
-        {/* 悬浮删除按钮 - 非根目录文件/文件夹，直接触发父组件的确认流程 */}
-        {onDeleteFile && !isGeneratedFolder && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              // 直接调用 onDeleteFile，由父组件处理确认
-              onDeleteFile(data.id, isDir);
-            }}
-            title={isDir ? "删除文件夹" : "删除文件"}
-          >
-            <Trash2 className="h-3 w-3 text-gray-400 hover:text-red-500" />
-          </Button>
+        {/* 操作按钮组 - 非根目录文件/文件夹 */}
+        {!isGeneratedFolder && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
+            {/* 下载按钮 - 仅文件显示 */}
+            {!isDir && data.download_url && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 hover:bg-gray-100 dark:hover:bg-gray-800"
+                onClick={handleDownload}
+                title="下载文件"
+              >
+                <Download className="h-3 w-3 text-gray-400 hover:text-blue-500" />
+              </Button>
+            )}
+            
+            {/* 删除按钮 */}
+            {onDeleteFile && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    onClick={(e) => e.stopPropagation()}
+                    title={isDir ? "删除文件夹" : "删除文件"}
+                  >
+                    <Trash2 className="h-3 w-3 text-gray-400 hover:text-red-500" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {isDir ? "删除文件夹？" : "删除文件？"}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {isDir
+                        ? `确定要删除文件夹 "${data.name}" 及其所有内容吗？此操作不可撤销。`
+                        : `确定要删除文件 "${data.name}" 吗？此操作不可撤销。`}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-red-600 hover:bg-red-700"
+                      onClick={handleDeleteConfirm}
+                    >
+                      确认删除
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -8,6 +8,7 @@ import base64
 import shutil
 import tempfile
 import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import Generator, List, Optional, Dict, Any
 from datetime import datetime
@@ -75,6 +76,7 @@ class ChatService:
             )
 
             cur_res = ""
+            chunk = None
             for chunk in response:
                 if chunk.choices and chunk.choices[0].delta.content is not None:
                     delta = chunk.choices[0].delta.content
@@ -86,7 +88,7 @@ class ChatService:
                     finished = True
                     break
 
-            if chunk.choices[0].finish_reason == "stop" and not finished:
+            if chunk and chunk.choices[0].finish_reason == "stop" and not finished:
                 if not cur_res.endswith("</Code>"):
                     missing_tag = "</Code>"
                     cur_res += missing_tag
@@ -227,6 +229,7 @@ class ReportService:
 
     # 缓存字体路径
     _cached_font_path: Optional[str] = None
+    _font_download_attempted: bool = False
 
     def __init__(self, workspace_service):
         self.workspace_service = workspace_service
@@ -314,7 +317,18 @@ class ReportService:
 
     def _download_chinese_font(self, font_dir: str) -> Optional[str]:
         """下载中文字体"""
-        font_url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/SimplifiedChinese/NotoSansSC-Regular.otf"
+        # 只尝试一次下载
+        if ReportService._font_download_attempted:
+            return None
+        
+        ReportService._font_download_attempted = True
+        
+        # 使用 Noto Sans SC 字体
+        font_urls = [
+            "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/SimplifiedChinese/NotoSansSC-Regular.otf",
+            "https://raw.githubusercontent.com/googlefonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansSC-Regular.otf",
+        ]
+        
         font_path = os.path.join(font_dir, "NotoSansSC-Regular.otf")
 
         if os.path.exists(font_path):
@@ -323,12 +337,26 @@ class ReportService:
         try:
             print(f"Downloading Chinese font to {font_path}...")
             os.makedirs(font_dir, exist_ok=True)
-            urllib.request.urlretrieve(font_url, font_path)
-            print(f"Font downloaded successfully")
-            return font_path
+            
+            for font_url in font_urls:
+                try:
+                    # 设置超时和重试
+                    req = urllib.request.Request(font_url, headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    })
+                    with urllib.request.urlopen(req, timeout=30) as response:
+                        with open(font_path, 'wb') as f:
+                            f.write(response.read())
+                        print(f"Font downloaded successfully from {font_url}")
+                        return font_path
+                except urllib.error.URLError as e:
+                    print(f"Failed to download from {font_url}: {e}")
+                    continue
+                    
         except Exception as e:
             print(f"Failed to download font: {e}")
-            return None
+            
+        return None
 
     def _find_chinese_font(self) -> Optional[str]:
         """查找可用的中文字体"""
@@ -337,33 +365,28 @@ class ReportService:
             if os.path.exists(ReportService._cached_font_path):
                 return ReportService._cached_font_path
 
+        # 常见字体路径
         font_paths = [
-            # Linux - WenQuanYi
-            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-            "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
-            # Linux - Noto CJK
+            # Linux - Noto CJK (最常见)
             "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
             "/usr/share/fonts/noto/NotoSansSC-Regular.otf",
+            # Linux - WenQuanYi
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+            "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
             # Linux - Source Han
             "/usr/share/fonts/adobe-source-han-sans/SourceHanSansSC-Regular.otf",
-            "/usr/share/fonts/truetype/source-han-sans/SourceHanSansSC-Regular.otf",
+            "/usr/share/fonts/opentype/source-han-sans/SourceHanSansSC-Regular.otf",
             # Linux - Droid
             "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
-            # Linux - DejaVu (fallback for some Chinese)
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-            # Linux - Liberation
-            "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
             # macOS
             "/System/Library/Fonts/PingFang.ttc",
             "/System/Library/Fonts/STHeiti Light.ttc",
             "/System/Library/Fonts/Hiragino Sans GB.ttc",
             "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-            # macOS user fonts
             "/Library/Fonts/Arial Unicode.ttf",
             # Windows
             "C:\\Windows\\Fonts\\msyh.ttc",
@@ -372,8 +395,6 @@ class ReportService:
             "C:\\Windows\\Fonts\\simsun.ttc",
             "C:\\Windows\\Fonts\\simkai.ttf",
             "C:\\Windows\\Fonts\\STZHONGS.TTF",
-            # Windows 11
-            "C:\\Windows\\Fonts\\msyhl.ttc",
         ]
 
         for fp in font_paths:
@@ -424,7 +445,7 @@ class ReportService:
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
             from reportlab.lib.units import inch, cm
             from reportlab.platypus import (
-                SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, PageBreak, KeepTogether
+                SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, PageBreak
             )
             from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
             from reportlab.pdfbase import pdfmetrics
@@ -447,7 +468,7 @@ class ReportService:
                 topMargin=2*cm,
                 bottomMargin=2*cm,
                 title="分析报告",
-                author="AI Assistant"
+                author="DeepAnalyze"
             )
 
             # 查找并注册中文字体
@@ -456,23 +477,23 @@ class ReportService:
 
             if chinese_font_path:
                 try:
-                    # 尝试注册字体
                     font_key = "ChineseFont"
-                    pdfmetrics.registerFont(TTFont(font_key, chinese_font_path))
-                    font_name = font_key
-                    print(f"Successfully registered Chinese font: {chinese_font_path}")
-                except Exception as e:
-                    print(f"Font registration failed: {e}")
-                    # 尝试其他方式
+                    # 尝试直接注册
                     try:
-                        # 某些字体文件可能需要特殊处理
-                        font_key = "CNFont"
-                        pdfmetrics.registerFont(TTFont(font_key, chinese_font_path, subfontIndex=0))
+                        pdfmetrics.registerFont(TTFont(font_key, chinese_font_path))
                         font_name = font_key
-                        print(f"Registered font with subfontIndex: {chinese_font_path}")
-                    except Exception as e2:
-                        print(f"Font registration with subfontIndex also failed: {e2}")
-                        font_name = "Helvetica"
+                        print(f"Successfully registered Chinese font: {chinese_font_path}")
+                    except Exception as e1:
+                        # 某些字体文件可能需要 subfontIndex
+                        print(f"Direct registration failed, trying subfontIndex: {e1}")
+                        try:
+                            pdfmetrics.registerFont(TTFont(font_key, chinese_font_path, subfontIndex=0))
+                            font_name = font_key
+                            print(f"Registered font with subfontIndex: {chinese_font_path}")
+                        except Exception as e2:
+                            print(f"Font registration with subfontIndex also failed: {e2}")
+                except Exception as e:
+                    print(f"Font registration error: {e}")
             else:
                 print("WARNING: No Chinese font found, PDF may have encoding issues")
 
@@ -564,7 +585,6 @@ class ReportService:
                         if code_buffer:
                             for code_line in code_buffer:
                                 try:
-                                    # 转义特殊字符
                                     escaped = code_line.replace("&", "&amp;")
                                     escaped = escaped.replace("<", "&lt;")
                                     escaped = escaped.replace(">", "&gt;")
@@ -573,7 +593,7 @@ class ReportService:
                                             f"<font face='Courier' size='8'>{escaped}</font>",
                                             code_style
                                         ))
-                                except Exception as e:
+                                except Exception:
                                     pass
                         code_buffer = []
                     in_code_block = not in_code_block
@@ -585,12 +605,10 @@ class ReportService:
 
                 line_stripped = line.strip()
 
-                # 跳过空行
                 if not line_stripped:
                     story.append(Spacer(1, 6))
                     continue
 
-                # 分隔线
                 if line_stripped == "---":
                     story.append(Spacer(1, 0.2*inch))
                     continue
@@ -611,10 +629,8 @@ class ReportService:
                     img_match = re.match(r"!\[([^\]]*)\]\(([^)]+)\)", line_stripped)
                     if img_match:
                         alt, url = img_match.groups()
-                        # 尝试多种 URL 格式
                         img_path = downloaded_images.get(url)
                         if not img_path:
-                            # 尝试相对路径
                             for key in downloaded_images:
                                 if url in key or key.endswith(url.split("/")[-1]):
                                     img_path = downloaded_images[key]
@@ -622,12 +638,10 @@ class ReportService:
 
                         if img_path and os.path.exists(img_path):
                             try:
-                                # 获取图片尺寸
                                 from PIL import Image as PILImage
                                 with PILImage.open(img_path) as pil_img:
                                     img_width, img_height = pil_img.size
 
-                                # 计算缩放比例
                                 max_width = 14 * cm
                                 max_height = 10 * cm
                                 scale = min(max_width / img_width, max_height / img_height, 1.0)
@@ -653,11 +667,9 @@ class ReportService:
                 # 普通段落
                 else:
                     text = line_stripped
-                    # 转义 XML 特殊字符
                     text = text.replace("&", "&amp;")
                     text = text.replace("<", "&lt;")
                     text = text.replace(">", "&gt;")
-                    # 处理 Markdown 格式
                     text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", text)
                     text = re.sub(r"\*([^*]+)\*", r"<i>\1</i>", text)
                     text = re.sub(r"`([^`]+)`", r"<font face='Courier' size='9'>\1</font>", text)
@@ -665,8 +677,7 @@ class ReportService:
                     if text:
                         try:
                             story.append(Paragraph(text, body_style))
-                        except Exception as e:
-                            # 简化处理
+                        except Exception:
                             try:
                                 clean_text = re.sub(r"[^\w\s\-.,!?;:'\"（）【】《》，。！？、；：\d]", "", line_stripped)
                                 if clean_text:
@@ -681,7 +692,6 @@ class ReportService:
 
         except ImportError as e:
             print(f"ReportLab not available: {e}")
-            # 返回 None，让调用者知道 PDF 生成失败
             return None
         except Exception as e:
             print(f"PDF generation failed: {e}")
@@ -709,7 +719,7 @@ class ReportService:
         export_dir = os.path.join(workspace_dir, "generated")
         os.makedirs(export_dir, exist_ok=True)
 
-        # 保存 Markdown (备份)
+        # 保存 Markdown
         md_path = self.save_md(md_text, base_name, export_dir)
 
         # 生成 PDF

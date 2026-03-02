@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Moon, Sun, Loader2 } from 'lucide-react';
-import { useAuthStore } from '@/lib/auth-store';
+import { useAuthStore } from '@/lib/store';
 import { useTheme } from '@/components/three-panel/hooks/useTheme';
 
 interface LoginPageProps {
@@ -38,8 +38,11 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       const data = await response.json();
 
       if (data.success && data.user) {
-        login(data.user);
-        onLoginSuccess();
+        login(data.user, data.token || '');
+        // 延迟调用 onLoginSuccess 以确保状态已更新
+        setTimeout(() => {
+          onLoginSuccess();
+        }, 0);
       } else {
         setError(data.error || '登录失败');
       }

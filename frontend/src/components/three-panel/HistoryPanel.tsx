@@ -60,7 +60,7 @@ export function HistoryPanel({
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 h-12 shrink-0">
         <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">
-          History
+          历史会话
         </h2>
         <span className="text-xs text-gray-400 dark:text-gray-500">
           {sessions.length} 个会话
@@ -106,16 +106,17 @@ export function HistoryPanel({
                     </div>
                   </div>
                   
-                  {/* 删除按钮带确认对话框 */}
+                  {/* 删除按钮 - 始终显示，悬浮时高亮 */}
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="h-7 w-7 p-0 shrink-0 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
                         onClick={(e) => e.stopPropagation()}
+                        title="删除会话"
                       >
-                        <Trash2 className="h-3 w-3 text-gray-400 hover:text-red-500" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent onClick={(e) => e.stopPropagation()}>
@@ -126,7 +127,7 @@ export function HistoryPanel({
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>取消</AlertDialogCancel>
+                        <AlertDialogCancel onClick={(e) => e.stopPropagation()}>取消</AlertDialogCancel>
                         <AlertDialogAction
                           className="bg-red-600 hover:bg-red-700"
                           onClick={(e) => {
