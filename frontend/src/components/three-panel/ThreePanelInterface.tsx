@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
@@ -20,8 +21,6 @@ import { API_URLS, authFetch } from "@/lib/config";
 import {
   useAuthStore,
   useSessionStore,
-  type StoredMessage,
-  type ChatSession,
 } from "@/lib/store";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { AdminPage } from "@/components/auth/AdminPage";
@@ -54,23 +53,20 @@ export function ThreePanelInterface() {
   // Auth 状态
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const currentUser = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
   const checkTimeout = useAuthStore((state) => state.checkTimeout);
   const updateActivity = useAuthStore((state) => state.updateActivity);
 
-  // 会话历史状态
-  const {
-    currentSessionId,
-    sessions,
-    setCurrentSession,
-    deleteSession,
-    createNewSession,
-    saveCurrentSession,
-    getSessionMessages,
-    hasMessages,
-    setCurrentUser,
-    loadSessionsFromBackend,
-    clearAllSessions,
-  } = useSessionStore();
+  // 会话历史状态 - 纯内存
+  const currentSessionId = useSessionStore((state) => state.currentSessionId);
+  const sessions = useSessionStore((state) => state.sessions);
+  const setCurrentSession = useSessionStore((state) => state.setCurrentSession);
+  const deleteSession = useSessionStore((state) => state.deleteSession);
+  const createNewSession = useSessionStore((state) => state.createNewSession);
+  const setSessions = useSessionStore((state) => state.setSessions);
+  const clearAllSessions = useSessionStore((state) => state.clearAllSessions);
+  const hasMessages = useSessionStore((state) => state.hasMessages);
+  const setHasMessages = useSessionStore((state) => state.setHasMessages);
 
   // Session 管理 - 获取初始 sessionId
   const { sessionId: initialSessionId, mounted } = useSession();
@@ -92,17 +88,26 @@ export function ThreePanelInterface() {
   const prevUserIdRef = useRef<string | null>(null);
 
   // 从后端加载用户的会话列表
-  const loadUserSessions = useCallback(async (userId: string) => {
+  const loadUserSessions = useCallback(async () => {
     try {
       const response = await authFetch(API_URLS.SESSIONS);
       if (response.ok) {
         const backendSessions = await response.json();
-        loadSessionsFromBackend(backendSessions);
+        // 转换后端会话格式为前端格式
+        const formattedSessions = backendSessions.map((s: any) => ({
+          id: s.id,
+          title: s.title || "新会话",
+          preview: s.preview,
+          messageCount: s.messageCount || s.message_count || 0,
+          updatedAt: s.updatedAt || s.updated_at || new Date().toISOString(),
+          messages: [], // 消息从后端按需加载
+        }));
+        setSessions(formattedSessions);
       }
     } catch (error) {
       console.error("Failed to load sessions from backend:", error);
     }
-  }, [loadSessionsFromBackend]);
+  }, [setSessions]);
 
   // 检查登录状态和超时
   useEffect(() => {
@@ -120,9 +125,8 @@ export function ThreePanelInterface() {
         // 检查用户是否变化
         if (prevUserIdRef.current !== currentUser.id) {
           // 用户变化，清空旧数据并加载新用户数据
-          setCurrentUser(currentUser.id);
           clearAllSessions();
-          loadUserSessions(currentUser.id);
+          loadUserSessions();
           prevUserIdRef.current = currentUser.id;
         }
       }
@@ -130,12 +134,11 @@ export function ThreePanelInterface() {
       setView("login");
       // 清空会话数据
       if (prevUserIdRef.current) {
-        setCurrentUser(null);
         clearAllSessions();
         prevUserIdRef.current = null;
       }
     }
-  }, [isAuthenticated, currentUser, checkTimeout, toast, setCurrentUser, clearAllSessions, loadUserSessions]);
+  }, [isAuthenticated, currentUser, checkTimeout, toast, clearAllSessions, loadUserSessions]);
 
   // 活动检测 - 更新最后活动时间
   useEffect(() => {
@@ -243,7 +246,6 @@ export function ThreePanelInterface() {
     clearChat,
     handleSendMessage,
     scrollToBottom,
-    saveSessionToHistory,
     loadSessionMessages,
   } = useChat(
     sessionId,
@@ -259,79 +261,46 @@ export function ThreePanelInterface() {
       return;
     }
 
-    // 保存当前会话到历史
-    if (hasMessages && messages.length > 1) {
-      const lastUserMessage = [...messages]
-        .reverse()
-        .find((m) => m.sender === "user");
-      const title = lastUserMessage?.content.slice(0, 50) || "新会话";
-      const preview = messages[messages.length - 1]?.content.slice(0, 100);
-
-      // 转换消息为存储格式
-      const storedMessages: StoredMessage[] = messages.map((m) => ({
-        id: m.id,
-        content: m.content,
-        sender: m.sender as "user" | "ai",
-        timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp),
-        localOnly: m.localOnly,
-      }));
-
-      saveCurrentSession(title, messages.length, preview, storedMessages);
-    }
-
-    // 创建新会话
+    // 创建新会话（只在内存中）
     createNewSession();
     clearChat();
 
     toast({ description: "已创建新会话" });
   }, [
     isTyping,
-    hasMessages,
-    messages,
-    saveCurrentSession,
     createNewSession,
     clearChat,
     toast,
   ]);
 
-  // 选择历史会话
+  // 选择历史会话 - 从后端加载消息
   const handleSelectSession = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (isTyping) {
         toast({ description: "请等待当前响应完成", variant: "destructive" });
         return;
       }
 
-      // 保存当前会话
-      if (hasMessages && messages.length > 1 && currentSessionId) {
-        const lastUserMessage = [...messages]
-          .reverse()
-          .find((m) => m.sender === "user");
-        const title = lastUserMessage?.content.slice(0, 50) || "新会话";
-
-        const storedMessages: StoredMessage[] = messages.map((m) => ({
-          id: m.id,
-          content: m.content,
-          sender: m.sender as "user" | "ai",
-          timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp),
-          localOnly: m.localOnly,
-        }));
-
-        saveCurrentSession(title, messages.length, undefined, storedMessages);
-      }
-
       // 切换到选择的会话
       setCurrentSession(id);
 
-      // 加载会话消息
-      const storedMsgs = getSessionMessages(id);
-      if (storedMsgs && storedMsgs.length > 0) {
-        const restored: Message[] = storedMsgs.map((m) => ({
-          ...m,
-          timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
-        })) as Message[];
-        loadSessionMessages(restored);
-      } else {
+      // 从后端加载会话消息
+      try {
+        const response = await authFetch(API_URLS.SESSION_MESSAGES(id));
+        if (response.ok) {
+          const backendMessages = await response.json();
+          const restored: Message[] = backendMessages.map((m: any) => ({
+            id: m.id,
+            content: m.content,
+            sender: m.role === "user" ? "user" : "ai",
+            timestamp: m.createdAt ? new Date(m.createdAt) : new Date(),
+          }));
+          loadSessionMessages(restored);
+        } else {
+          clearChat();
+        }
+      } catch (error) {
+        console.error("Failed to load session messages:", error);
         clearChat();
       }
 
@@ -339,12 +308,7 @@ export function ThreePanelInterface() {
     },
     [
       isTyping,
-      hasMessages,
-      messages,
-      currentSessionId,
-      saveCurrentSession,
       setCurrentSession,
-      getSessionMessages,
       loadSessionMessages,
       clearChat,
       toast,
@@ -358,17 +322,16 @@ export function ThreePanelInterface() {
         // 调用后端 API 删除会话
         const response = await authFetch(`${API_URLS.SESSIONS}/${id}`, {
           method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           console.error("Failed to delete session from backend:", errorData);
+          toast({ description: "删除失败", variant: "destructive" });
+          return;
         }
 
-        // 删除本地会话
+        // 从内存中删除会话
         deleteSession(id);
         // 如果删除的是当前会话，创建新会话
         if (id === currentSessionId) {
@@ -378,13 +341,7 @@ export function ThreePanelInterface() {
         toast({ description: "已删除会话" });
       } catch (error) {
         console.error("Delete session error:", error);
-        // 即使后端删除失败，也删除本地会话
-        deleteSession(id);
-        if (id === currentSessionId) {
-          createNewSession();
-          clearChat();
-        }
-        toast({ description: "已删除会话（本地）" });
+        toast({ description: "删除失败", variant: "destructive" });
       }
     },
     [deleteSession, currentSessionId, createNewSession, clearChat, toast]

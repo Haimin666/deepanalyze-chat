@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { API_URLS, authFetch } from "@/lib/config";
-import { useSessionStore, StoredMessage } from "@/lib/store";
+import { useSessionStore } from "@/lib/store";
 import { Message } from "../types";
 import { getPrevUserQuestionText } from "../utils";
 
@@ -16,7 +16,7 @@ const WELCOME_MESSAGE: Message = {
 
 /**
  * 聊天管理 Hook
- * 支持按会话存储和加载消息
+ * 消息从后端 API 获取，不保存到本地
  */
 export function useChat(
   sessionId: string,
@@ -38,7 +38,7 @@ export function useChat(
   const streamRafRef = useRef<number | null>(null);
 
   // 从 store 获取方法
-  const { setHasMessages, sessions, saveCurrentSession, getSessionMessages } = useSessionStore();
+  const setHasMessages = useSessionStore((state) => state.setHasMessages);
 
   // 节流滚动到底部
   const scrollToBottom = useCallback((force: boolean = false) => {
@@ -85,60 +85,27 @@ export function useChat(
     }
   }, [messages, scrollToBottom, streamingMessageId]);
 
-  // 会话变化时加载消息
+  // 会话变化时重置消息
   useEffect(() => {
     if (!sessionId) return;
-
-    // 尝试从会话历史加载消息
-    const storedMessages = getSessionMessages(sessionId);
-
-    if (storedMessages && storedMessages.length > 0) {
-      const restored = storedMessages.map((m) => ({
-        ...m,
-        timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
-      })) as Message[];
-      setMessages(restored);
-      setHasMessages(true);
-    } else {
-      // 新会话，显示欢迎消息
-      const welcome: Message = {
-        id: `welcome-${Date.now()}`,
-        content: "Hello! I'm DeepAnalyze-8B, your autonomous data science assistant. Upload your data and let's explore it together!",
-        sender: "ai",
-        timestamp: new Date(),
-        localOnly: true,
-      };
-      setMessages([welcome]);
-      setHasMessages(false);
-    }
-  }, [sessionId, getSessionMessages, setHasMessages]);
+    
+    // 新会话，显示欢迎消息（消息从后端按需加载）
+    const welcome: Message = {
+      id: `welcome-${Date.now()}`,
+      content: "Hello! I'm DeepAnalyze-8B, your autonomous data science assistant. Upload your data and let's explore it together!",
+      sender: "ai",
+      timestamp: new Date(),
+      localOnly: true,
+    };
+    setMessages([welcome]);
+    setHasMessages(false);
+  }, [sessionId, setHasMessages]);
 
   // 更新 hasMessages 状态
   useEffect(() => {
     const hasRealMessages = messages.some((m) => !m.localOnly);
     setHasMessages(hasRealMessages);
   }, [messages, setHasMessages]);
-
-  // 保存会话到历史
-  const saveSessionToHistory = useCallback(() => {
-    const realMessages = messages.filter((m) => !m.localOnly);
-    if (realMessages.length === 0) return;
-
-    const lastUserMessage = [...realMessages].reverse().find((m) => m.sender === "user");
-    const title = lastUserMessage?.content.slice(0, 50) || "新会话";
-    const preview = messages[messages.length - 1]?.content.slice(0, 100);
-
-    // 转换消息为存储格式
-    const storedMessages: StoredMessage[] = messages.map((m) => ({
-      id: m.id,
-      content: m.content,
-      sender: m.sender,
-      timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : String(m.timestamp),
-      localOnly: m.localOnly,
-    }));
-
-    saveCurrentSession(title, messages.length, preview, storedMessages);
-  }, [messages, saveCurrentSession]);
 
   // 清空聊天
   const clearChat = useCallback(() => {
@@ -156,7 +123,7 @@ export function useChat(
     setHasMessages(false);
   }, [isTyping, setHasMessages]);
 
-  // 加载指定会话的消息
+  // 加载指定会话的消息（从后端加载）
   const loadSessionMessages = useCallback((sessionMessages: Message[]) => {
     setMessages(sessionMessages);
     setHasMessages(sessionMessages.some((m) => !m.localOnly));
@@ -373,7 +340,6 @@ export function useChat(
     clearChat,
     handleSendMessage,
     scrollToBottom,
-    saveSessionToHistory,
     loadSessionMessages,
     getPrevUserQuestionText: (index: number) => getPrevUserQuestionText(messages, index),
   };

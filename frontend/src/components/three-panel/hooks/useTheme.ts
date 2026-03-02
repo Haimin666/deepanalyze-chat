@@ -15,16 +15,13 @@ function useMounted() {
 
 /**
  * 主题管理 Hook
+ * 纯内存状态，不持久化
  */
 export function useTheme() {
   const mounted = useMounted();
 
-  // 使用惰性初始化
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const savedTheme = localStorage.getItem("theme");
-    return savedTheme === "dark";
-  });
+  // 默认使用浅色模式，不读取 localStorage
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   // 更新主题 class
   const updateThemeClass = useCallback((isDark: boolean) => {
@@ -47,10 +44,6 @@ export function useTheme() {
     setIsDarkMode((prev) => {
       const newDarkMode = !prev;
       updateThemeClass(newDarkMode);
-      // 保存到 localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem("theme", newDarkMode ? "dark" : "light");
-      }
       return newDarkMode;
     });
   }, [updateThemeClass]);

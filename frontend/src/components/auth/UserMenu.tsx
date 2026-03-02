@@ -12,8 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { LogOut, Settings, User, Shield } from 'lucide-react';
-import { useAuthStore } from '@/lib/auth-store';
-import type { User as UserType } from '@/lib/auth-types';
+import { useAuthStore } from '@/lib/store';
 
 interface UserMenuProps {
   onLogout: () => void;
@@ -21,7 +20,7 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ onLogout, onOpenAdmin }: UserMenuProps) {
-  const { user } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
   const [isOpen, setIsOpen] = useState(false);
 
   if (!user) return null;
@@ -54,7 +53,6 @@ export function UserMenu({ onLogout, onOpenAdmin }: UserMenuProps) {
           className="relative h-8 w-8 rounded-full"
         >
           <Avatar className="h-8 w-8">
-            <AvatarImage src={user.avatar} alt={user.name} />
             <AvatarFallback className="bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-medium">
               {getInitials(user.name)}
             </AvatarFallback>
@@ -69,7 +67,7 @@ export function UserMenu({ onLogout, onOpenAdmin }: UserMenuProps) {
               {getRoleBadge(user.role)}
             </div>
             <p className="text-xs leading-none text-gray-500 dark:text-gray-400">
-              {user.email}
+              {user.username}
             </p>
           </div>
         </DropdownMenuLabel>

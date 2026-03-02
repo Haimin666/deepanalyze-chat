@@ -16,7 +16,7 @@ export const API_CONFIG = {
 
 /**
  * 获取认证请求头
- * 从 localStorage 读取 auth-storage 中的 token
+ * 从 Zustand store 获取 token（非 hook 方式）
  */
 export function getAuthHeaders(): Record<string, string> {
   if (typeof window === "undefined") {
@@ -24,13 +24,10 @@ export function getAuthHeaders(): Record<string, string> {
   }
   
   try {
-    const authStorageStr = localStorage.getItem("auth-storage");
-    if (!authStorageStr) {
-      return {};
-    }
-    
-    const authStorage = JSON.parse(authStorageStr);
-    const token = authStorage?.state?.token;
+    // 动态导入 store 以避免循环依赖
+    // 使用 Zustand 的 getState() 非 hook 方式获取状态
+    const { useAuthStore } = require("./store");
+    const token = useAuthStore.getState?.()?.token;
     
     if (!token) {
       return {};
