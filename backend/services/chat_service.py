@@ -1,5 +1,6 @@
 """
 聊天服务层 - 处理AI聊天逻辑和报告导出
+支持数据库同步记录生成的文件
 """
 import os
 import re
@@ -9,6 +10,7 @@ import shutil
 import tempfile
 import urllib.request
 import urllib.error
+import uuid
 from pathlib import Path
 from typing import Generator, List, Optional, Dict, Any
 from datetime import datetime
@@ -111,7 +113,7 @@ class ChatService:
 
                     # 处理生成的文件
                     artifact_paths = self._handle_generated_files(
-                        WORKSPACE_DIR, GENERATED_DIR
+                        WORKSPACE_DIR, GENERATED_DIR, session_id
                     )
 
                     # 构建执行结果
@@ -140,9 +142,10 @@ class ChatService:
     def _handle_generated_files(
         self,
         workspace_dir: str,
-        generated_dir: str
+        generated_dir: str,
+        session_id: str = "default"
     ) -> List[Path]:
-        """处理代码生成的文件"""
+        """处理代码生成的文件并同步到数据库"""
         # 执行前快照
         try:
             before_state = {
@@ -171,6 +174,7 @@ class ChatService:
         ]
 
         artifact_paths = []
+        abs_workspace = Path(workspace_dir).resolve()
 
         # 处理新增文件
         for p in added_paths:
@@ -181,6 +185,21 @@ class ChatService:
                     artifact_paths.append(dest_path.resolve())
                 else:
                     artifact_paths.append(p)
+                    
+                # 注册到数据库
+                try:
+                    rel_path = str(p.relative_to(abs_workspace))
+                    self.workspace_service.register_file(
+                        session_id=session_id,
+                        name=p.name,
+                        path=rel_path,
+                        size=p.stat().st_size,
+                        extension=p.suffix.lower(),
+                        is_generated=True
+                    )
+                except Exception as e:
+                    print(f"Warning: Failed to register generated file: {e}")
+                    
             except Exception as e:
                 print(f"Error moving file {p}: {e}")
                 artifact_paths.append(p)
@@ -192,6 +211,21 @@ class ChatService:
                 dest_path = uniquify_path(Path(generated_dir) / dest_name)
                 shutil.copy2(p, dest_path)
                 artifact_paths.append(dest_path.resolve())
+                
+                # 注册到数据库
+                try:
+                    rel_path = str(dest_path.relative_to(abs_workspace))
+                    self.workspace_service.register_file(
+                        session_id=session_id,
+                        name=dest_path.name,
+                        path=rel_path,
+                        size=dest_path.stat().st_size,
+                        extension=dest_path.suffix.lower(),
+                        is_generated=True
+                    )
+                except Exception as e:
+                    print(f"Warning: Failed to register modified file: {e}")
+                    
             except Exception as e:
                 print(f"Error copying modified file {p}: {e}")
 
@@ -688,11 +722,38 @@ class ReportService:
 
         # 保存 Markdown
         md_path = self.save_md(md_text, base_name, export_dir)
+        
+        # 注册 MD 文件到数据库
+        try:
+            self.workspace_service.register_file(
+                session_id=session_id,
+                name=md_path.name,
+                path=f"generated/{md_path.name}",
+                size=md_path.stat().st_size,
+                extension=".md",
+                is_generated=True
+            )
+        except Exception as e:
+            print(f"Warning: Failed to register MD file: {e}")
 
         # 生成 PDF (使用 md->html->pdf 方式)
         pdf_path, pdf_error = self.generate_pdf(
             md_text, images, base_name, export_dir, session_id, user_id
         )
+        
+        # 注册 PDF 文件到数据库
+        if pdf_path:
+            try:
+                self.workspace_service.register_file(
+                    session_id=session_id,
+                    name=pdf_path.name,
+                    path=f"generated/{pdf_path.name}",
+                    size=pdf_path.stat().st_size,
+                    extension=".pdf",
+                    is_generated=True
+                )
+            except Exception as e:
+                print(f"Warning: Failed to register PDF file: {e}")
 
         # 构建返回结果
         result = {

@@ -295,6 +295,31 @@ class DatabaseService:
             db.commit()
             return True
 
+    def delete_file_by_path(self, session_id: str, path: str) -> bool:
+        """根据路径删除文件记录"""
+        with self.get_session() as db:
+            file = db.query(WorkspaceFileModel).filter(
+                WorkspaceFileModel.session_id == session_id,
+                WorkspaceFileModel.path == path
+            ).first()
+            if not file:
+                return False
+            db.delete(file)
+            db.commit()
+            return True
+
+    def delete_files_by_path_prefix(self, session_id: str, path_prefix: str) -> int:
+        """删除指定路径前缀的所有文件记录（用于删除目录）"""
+        with self.get_session() as db:
+            # 使用 LIKE 匹配路径前缀
+            pattern = f"{path_prefix}%"
+            count = db.query(WorkspaceFileModel).filter(
+                WorkspaceFileModel.session_id == session_id,
+                WorkspaceFileModel.path.like(pattern)
+            ).delete(synchronize_session=False)
+            db.commit()
+            return count
+
     def delete_files_by_session(self, session_id: str) -> bool:
         """删除会话的所有文件记录"""
         with self.get_session() as db:

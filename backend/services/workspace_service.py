@@ -1,14 +1,17 @@
 """
 工作区服务层 - 处理文件系统操作
+支持数据库同步记录文件元数据
 """
 import os
 import shutil
+import uuid
 from pathlib import Path
 from urllib.parse import quote
 from typing import List, Optional
 
 from config.settings import WORKSPACE_BASE_DIR, HTTP_SERVER_BASE
 from models.workspace import WorkspaceFile, WorkspaceNode
+from services.database_service import db_service
 
 
 class WorkspaceService:
@@ -170,7 +173,7 @@ class WorkspaceService:
                 self._prefix_urls(child, user_id, session_id)
 
     def delete_file(self, path: str, session_id: str, user_id: str = "default") -> bool:
-        """删除文件"""
+        """删除文件并同步数据库记录"""
         workspace_dir = self.get_session_workspace(session_id, user_id)
         abs_workspace = Path(workspace_dir).resolve()
         target = (abs_workspace / path).resolve()
@@ -183,10 +186,17 @@ class WorkspaceService:
             raise ValueError("Folder deletion not allowed")
 
         target.unlink()
+        
+        # 同步删除数据库记录
+        try:
+            db_service.delete_file_by_path(session_id, path)
+        except Exception as e:
+            print(f"Warning: Failed to delete file record from database: {e}")
+        
         return True
 
     def delete_dir(self, path: str, session_id: str, user_id: str = "default", recursive: bool = True) -> bool:
-        """删除目录"""
+        """删除目录并同步数据库记录"""
         workspace_dir = self.get_session_workspace(session_id, user_id)
         abs_workspace = Path(workspace_dir).resolve()
         target = (abs_workspace / path).resolve()
@@ -199,6 +209,12 @@ class WorkspaceService:
             raise FileNotFoundError("Not found")
         if not target.is_dir():
             raise ValueError("Not a directory")
+
+        # 先删除数据库记录
+        try:
+            db_service.delete_files_by_path_prefix(session_id, path)
+        except Exception as e:
+            print(f"Warning: Failed to delete file records from database: {e}")
 
         if recursive:
             shutil.rmtree(target)
@@ -229,7 +245,7 @@ class WorkspaceService:
         return str(target.relative_to(abs_workspace))
 
     def upload_files(self, files: List, session_id: str, user_id: str = "default", dir_path: str = "") -> List[dict]:
-        """上传文件"""
+        """上传文件并同步数据库记录"""
         from utils.file_utils import uniquify_path
 
         workspace_dir = self.get_session_workspace(session_id, user_id)
@@ -250,17 +266,74 @@ class WorkspaceService:
             content = f.file.read() if hasattr(f, 'file') else f.read()
             with open(dst, "wb") as buffer:
                 buffer.write(content)
+            
+            file_path = str(dst.relative_to(abs_workspace))
+            file_size = len(content)
+            file_extension = dst.suffix.lower()
+            
+            # 同步到数据库
+            try:
+                db_service.create_file(
+                    file_id=str(uuid.uuid4()),
+                    session_id=session_id,
+                    name=dst.name,
+                    path=file_path,
+                    size=file_size,
+                    extension=file_extension,
+                    is_generated=False
+                )
+            except Exception as e:
+                print(f"Warning: Failed to create file record in database: {e}")
+            
             saved.append({
                 "name": dst.name,
-                "size": len(content),
-                "path": str(dst.relative_to(abs_workspace)),
+                "size": file_size,
+                "path": file_path,
             })
         return saved
 
     def clear_workspace(self, session_id: str, user_id: str = "default") -> bool:
-        """清空工作区"""
+        """清空工作区并删除数据库记录"""
         workspace_dir = self.get_session_workspace(session_id, user_id)
         if os.path.exists(workspace_dir):
             shutil.rmtree(workspace_dir)
         os.makedirs(workspace_dir, exist_ok=True)
+        
+        # 删除该会话的所有文件记录
+        try:
+            db_service.delete_files_by_session(session_id)
+        except Exception as e:
+            print(f"Warning: Failed to delete file records from database: {e}")
+        
         return True
+
+    def register_file(self, session_id: str, name: str, path: str, 
+                      size: int = 0, extension: str = None, is_generated: bool = False) -> dict:
+        """
+        注册文件到数据库（用于代码生成的文件、导出的报告等）
+        
+        Args:
+            session_id: 会话ID
+            name: 文件名
+            path: 相对路径
+            size: 文件大小
+            extension: 文件扩展名
+            is_generated: 是否为系统生成的文件
+            
+        Returns:
+            创建的文件记录字典
+        """
+        try:
+            file_record = db_service.create_file(
+                file_id=str(uuid.uuid4()),
+                session_id=session_id,
+                name=name,
+                path=path,
+                size=size,
+                extension=extension,
+                is_generated=is_generated
+            )
+            return file_record.to_dict() if file_record else None
+        except Exception as e:
+            print(f"Warning: Failed to register file in database: {e}")
+            return None
