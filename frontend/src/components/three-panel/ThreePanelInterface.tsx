@@ -317,6 +317,13 @@ export function ThreePanelInterface() {
       return;
     }
 
+    // 检查当前会话是否有用户聊天记录
+    const hasUserMessages = messages.some(m => m.sender === "user" && !m.localOnly);
+    if (!hasUserMessages && messages.length === 0) {
+      toast({ description: "当前会话无聊天记录，无需新建会话" });
+      return;
+    }
+
     // 创建新会话（在内存中）
     const newSessionId = createNewSession();
     clearChat();
@@ -338,6 +345,7 @@ export function ThreePanelInterface() {
     toast({ description: "已创建新会话" });
   }, [
     isTyping,
+    messages,
     createNewSession,
     clearChat,
     toast,
@@ -457,14 +465,18 @@ export function ThreePanelInterface() {
       const pdfName = data?.pdf || `report_${Date.now()}.pdf`;
 
       if (pdfUrl) {
-        // 使用 fetch + blob 方式下载，避免跨域问题
+        // 使用代理 API 下载文件，确保携带认证信息
         try {
-          const pdfRes = await fetch(pdfUrl);
+          // 构建代理 URL
+          const proxyUrl = `/api/proxy?url=${encodeURIComponent(pdfUrl)}`;
+          const pdfRes = await authFetch(proxyUrl);
+          
           if (!pdfRes.ok) throw new Error(`PDF fetch failed: ${pdfRes.status}`);
           
           const blob = await pdfRes.blob();
           const blobUrl = URL.createObjectURL(blob);
           
+          // 创建下载链接
           const link = document.createElement("a");
           link.href = blobUrl;
           link.download = pdfName;
@@ -478,12 +490,16 @@ export function ThreePanelInterface() {
             document.body.removeChild(link);
           }, 100);
           
-          toast({ description: `已生成并下载: ${pdfName}` });
+          const message = data.message === "cached" 
+            ? `报告已存在，直接下载: ${pdfName}` 
+            : `已生成并下载: ${pdfName}`;
+          toast({ description: message });
         } catch (downloadErr) {
           console.error("Download error:", downloadErr);
-          // 回退到直接打开链接
-          window.open(pdfUrl, "_blank");
-          toast({ description: `报告已生成，请在新窗口下载` });
+          toast({ 
+            description: `报告已生成到 workspace/generated 目录，请从文件列表下载`,
+            variant: "default" 
+          });
         }
       } else {
         // PDF 生成失败，显示错误

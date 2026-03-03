@@ -653,12 +653,38 @@ class ReportService:
         if not md_text:
             md_text = "（未找到分析内容）\n\n请在对话中进行分析后再导出报告。"
 
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 使用消息内容的 hash 作为文件名基础，避免重复生成
+        import hashlib
+        content_hash = hashlib.md5(md_text.encode('utf-8')).hexdigest()[:8]
         safe_title = re.sub(r"[^\w\-_.]+", "_", title) if title else "Report"
-        base_name = f"{safe_title}_{ts}" if title else f"Report_{ts}"
+        base_name = f"{safe_title}_{content_hash}"
 
         export_dir = os.path.join(workspace_dir, "generated")
         os.makedirs(export_dir, exist_ok=True)
+
+        # 检查是否已存在相同的报告
+        existing_md = os.path.join(export_dir, f"{base_name}.md")
+        existing_pdf = os.path.join(export_dir, f"{base_name}.pdf")
+        
+        if os.path.exists(existing_md):
+            # 已存在相同内容的报告，直接返回
+            result = {
+                "message": "cached",
+                "md": os.path.basename(existing_md),
+                "pdf": os.path.basename(existing_pdf) if os.path.exists(existing_pdf) else None,
+                "images_count": len(images),
+                "download_urls": {
+                    "md": self.workspace_service.build_download_url(
+                        f"{user_id}/{session_id}/generated/{os.path.basename(existing_md)}"
+                    ),
+                }
+            }
+            if os.path.exists(existing_pdf):
+                result["download_urls"]["pdf"] = self.workspace_service.build_download_url(
+                    f"{user_id}/{session_id}/generated/{os.path.basename(existing_pdf)}"
+                )
+            print(f"Report already exists (cached): {result}")
+            return result
 
         # 保存 Markdown
         md_path = self.save_md(md_text, base_name, export_dir)

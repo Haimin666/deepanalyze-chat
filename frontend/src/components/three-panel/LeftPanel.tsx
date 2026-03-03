@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Tree } from "react-arborist";
-import { Button } from "@/components/ui/button";
+import { Button } from "@components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,6 +69,13 @@ export function LeftPanel({
   const treeContentRef = useRef<HTMLDivElement>(null);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [isDraggingSplit, setIsDraggingSplit] = useState(false);
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
+
+  // 处理清空工作区
+  const handleClearWorkspace = useCallback(async () => {
+    await onClearWorkspace();
+    setClearDialogOpen(false);
+  }, [onClearWorkspace]);
 
   // 处理拖拽分割线
   const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
@@ -128,7 +135,7 @@ export function LeftPanel({
               }}
               className="hidden"
             />
-            <AlertDialog>
+            <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
               <AlertDialogTrigger asChild>
                 <Button
                   variant="ghost"
@@ -150,7 +157,7 @@ export function LeftPanel({
                   <AlertDialogCancel>取消</AlertDialogCancel>
                   <AlertDialogAction
                     className="bg-red-600 hover:bg-red-700"
-                    onClick={onClearWorkspace}
+                    onClick={handleClearWorkspace}
                   >
                     确认清空
                   </AlertDialogAction>
