@@ -4,7 +4,7 @@
 from fastapi import APIRouter, Body, Depends, Header
 from typing import Optional
 
-from config.database import SESSION_TIMEOUT_MINUTES
+from config.settings import SESSION_TIMEOUT_MINUTES
 from controllers.auth_controller import AuthController, UserController
 from controllers.session_controller import SessionController
 from models.workspace import LoginRequest, LoginResponse, User, SessionCreate, ChatSession

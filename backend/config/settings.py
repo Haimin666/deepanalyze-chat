@@ -39,7 +39,7 @@ DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB
 # ============================================
 # JWT Configuration
 # ============================================
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your_very_secure_jwt_secret_key_change_in_production")
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "26f04e88fe5ec70117d21e3b40646a975fb1c4bd7c79313e712c70e6f8bebd60")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_HOURS = get_env_int("JWT_EXPIRE_HOURS", 24)
 

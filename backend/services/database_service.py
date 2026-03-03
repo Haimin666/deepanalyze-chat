@@ -11,7 +11,7 @@ import bcrypt
 import uuid
 import jwt
 
-from config.database import DATABASE_URL, JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_HOURS
+from config.settings import DATABASE_URL, JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_HOURS
 from models.database import Base, UserModel, SessionModel, MessageModel, WorkspaceFileModel
 
 

@@ -28,7 +28,7 @@ import uvicorn
 
 # 导入配置
 from config.settings import API_HOST, API_PORT, USE_MOCK_LLM
-from config.database import DB_HOST, DB_NAME
+from config.settings import DB_HOST, DB_NAME
 
 # 导入服务
 from services.workspace_service import WorkspaceService
