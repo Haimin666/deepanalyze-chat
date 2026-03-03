@@ -18,6 +18,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const url = searchParams.get("url");
+    const download = searchParams.get("download"); // 是否强制下载
+    const filename = searchParams.get("filename"); // 指定文件名
     const cookieHeader = request.headers.get("cookie") || "";
     const token = getTokenFromCookie(cookieHeader);
 
@@ -47,11 +49,23 @@ export async function GET(request: NextRequest) {
     const contentType = response.headers.get("content-type") || "application/octet-stream";
     const data = await response.arrayBuffer();
 
+    // 构建响应头
+    const responseHeaders: Record<string, string> = {
+      "Content-Type": contentType,
+      "Access-Control-Allow-Origin": "*",
+    };
+
+    // 如果指定了 download 参数或者文件是 PDF，强制下载
+    const shouldDownload = download === "true" || contentType.includes("pdf");
+    if (shouldDownload) {
+      // 从 URL 中提取文件名或使用指定的文件名
+      const defaultFilename = url.split("/").pop()?.split("?")[0] || "download";
+      const finalFilename = filename || defaultFilename;
+      responseHeaders["Content-Disposition"] = `attachment; filename="${encodeURIComponent(finalFilename)}"`;
+    }
+
     return new NextResponse(data, {
-      headers: {
-        "Content-Type": contentType,
-        "Access-Control-Allow-Origin": "*",
-      },
+      headers: responseHeaders,
     });
   } catch (error) {
     console.error("Proxy GET /proxy error:", error);
