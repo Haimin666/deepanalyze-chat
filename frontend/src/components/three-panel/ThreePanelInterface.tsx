@@ -62,6 +62,8 @@ export function ThreePanelInterface() {
   const initialized = useAuthStore((state) => state.initialized);
   const setInitialized = useAuthStore((state) => state.setInitialized);
   const restoreFromCookie = useAuthStore((state) => state.restoreFromCookie);
+  const timedOut = useAuthStore((state) => state.timedOut);
+  const clearTimedOut = useAuthStore((state) => state.clearTimedOut);
 
   // 会话历史状态 - 纯内存
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -110,9 +112,15 @@ export function ThreePanelInterface() {
         }
 
         // 2. 优先从 cookie 恢复用户信息
-        const restoredFromCookie = restoreFromCookie();
+        const result = restoreFromCookie();
         
-        if (restoredFromCookie) {
+        if (result.timedOut) {
+          // 因超时而登出，不需要调用后端 API
+          // toast 会由下面的 useEffect 处理
+          return;
+        }
+        
+        if (result.restored) {
           // 用户信息已从 cookie 恢复，验证 token 是否仍然有效
           const meRes = await fetch('/api/auth/me', {
             credentials: 'include',
@@ -194,6 +202,17 @@ export function ThreePanelInterface() {
       }
     }
   }, [initialized, isAuthenticated, currentUser, toast, clearAllSessions, loadUserSessions]);
+
+  // 处理超时提示
+  useEffect(() => {
+    if (timedOut && initialized && !isAuthenticated) {
+      toast({
+        description: "由于长时间未操作，已自动退出登录",
+        variant: "destructive",
+      });
+      clearTimedOut();
+    }
+  }, [timedOut, initialized, isAuthenticated, toast, clearTimedOut]);
 
   // 活动检测 - 更新最后活动时间
   useEffect(() => {
