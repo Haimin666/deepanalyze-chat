@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Tree } from "react-arborist";
-import { Button } from "@components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
