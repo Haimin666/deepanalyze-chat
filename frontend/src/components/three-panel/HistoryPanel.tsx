@@ -115,8 +115,11 @@ export function HistoryPanel({
                     </div>
                   </div>
                   
-                  {/* 删除按钮 - 始终可见，放在最右边 */}
-                  <div className="shrink-0 ml-auto" onClick={(e) => e.stopPropagation()}>
+                  {/* 删除按钮 - 鼠标悬停时显示 */}
+                  <div 
+                    className="shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-150" 
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <AlertDialog open={deleteDialogOpen === session.id} onOpenChange={(open) => {
                       if (!open) setDeleteDialogOpen(null);
                     }}>
