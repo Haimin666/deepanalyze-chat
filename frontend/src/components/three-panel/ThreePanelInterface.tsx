@@ -279,9 +279,11 @@ export function ThreePanelInterface() {
       return;
     }
 
-    // 检查当前会话是否有用户聊天记录
+    // 检查当前会话是否有用户的实际聊天记录（排除欢迎消息等 localOnly 消息）
     const hasUserMessages = messages.some(m => m.sender === "user" && !m.localOnly);
-    if (!hasUserMessages && messages.length === 0) {
+    
+    // 如果没有用户消息，说明只有欢迎消息或为空，不需要新建会话
+    if (!hasUserMessages) {
       toast({ description: "当前会话无聊天记录，无需新建会话" });
       return;
     }
