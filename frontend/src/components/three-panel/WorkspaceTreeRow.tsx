@@ -108,7 +108,7 @@ export const WorkspaceTreeRow = ({
       )}
 
       <div
-        className={`group flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-900 rounded px-2 py-1 cursor-pointer ${
+        className={`group relative flex items-center hover:bg-gray-50 dark:hover:bg-gray-900 rounded px-2 py-1 pr-16 cursor-pointer ${
           isGenerated ? "bg-purple-50 dark:bg-purple-950/20" : ""
         }`}
         onClick={(e) => {
@@ -188,11 +188,11 @@ export const WorkspaceTreeRow = ({
           )}
         </div>
 
-        {/* 操作按钮组 - 非根目录文件/文件夹 */}
+        {/* 操作按钮组 - 绝对定位，鼠标悬停时显示 */}
         {!isGeneratedFolder && (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
             {/* 下载按钮 - 仅文件显示 */}
-            {!isDir && data.download_url && (
+            {!isDir && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -203,7 +203,7 @@ export const WorkspaceTreeRow = ({
                 <Download className="h-3 w-3 text-gray-400 hover:text-blue-500" />
               </Button>
             )}
-            
+
             {/* 删除按钮 */}
             {onDeleteFile && (
               <AlertDialog>
