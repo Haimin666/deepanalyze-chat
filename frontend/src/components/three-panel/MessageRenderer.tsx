@@ -51,6 +51,24 @@ type MessageRendererProps = {
   toast: any;
 };
 
+/**
+ * 获取可直接访问的文件URL（不走代理）
+ */
+const getDirectFileUrl = (url: string): string => {
+  // 如果已经是文件服务器URL，直接返回
+  if (url.includes(":8100") || url.startsWith(API_CONFIG.FILE_SERVER_BASE_URL)) {
+    return url;
+  }
+  
+  // 如果是代理URL，提取原始URL
+  const proxyMatch = url.match(/[?&]url=([^&]+)/);
+  if (proxyMatch) {
+    return decodeURIComponent(proxyMatch[1]);
+  }
+  
+  return url;
+};
+
 export function useMessageRenderer({
   isDarkMode,
   collapsedSections,
@@ -116,11 +134,11 @@ export function useMessageRenderer({
                         String(href || "")
                       );
                       const corrected = ensureGeneratedInUrl(normalized);
-                      const proxied = `${API_CONFIG.BACKEND_BASE_URL
-                        }/proxy?url=${encodeURIComponent(corrected)}`;
+                      // 直接访问文件服务器，不走代理
+                      const directUrl = getDirectFileUrl(corrected);
                       return (
                         <a
-                          href={proxied}
+                          href={directUrl}
                           className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
                           target="_blank"
                           rel="noopener noreferrer"
@@ -132,13 +150,20 @@ export function useMessageRenderer({
                     img: ({ src, alt }: any) => {
                       const normalizedSrc = normalizeToLocalFileUrl(src || "");
                       const correctedSrc = ensureGeneratedInUrl(normalizedSrc);
-                      const proxiedSrc = `${API_CONFIG.BACKEND_BASE_URL
-                        }/proxy?url=${encodeURIComponent(correctedSrc)}`;
+                      // 直接访问文件服务器，不走代理
+                      const directSrc = getDirectFileUrl(correctedSrc);
                       return (
                         <img
-                          src={proxiedSrc}
+                          src={directSrc}
                           alt={alt || ""}
                           className="max-w-full h-auto rounded-lg my-2"
+                          onError={(e) => {
+                            // 图片加载失败时尝试使用代理
+                            const target = e.target as HTMLImageElement;
+                            if (!target.src.includes("/proxy?url=")) {
+                              target.src = `${API_CONFIG.BACKEND_BASE_URL}/proxy?url=${encodeURIComponent(correctedSrc)}`;
+                            }
+                          }}
                         />
                       );
                     },
@@ -384,24 +409,31 @@ export function useMessageRenderer({
                 <div className="grid grid-cols-2 gap-2">
                   {files.map((f, i) => {
                     const correctedUrl = ensureGeneratedInUrl(f.url);
-                    const proxiedUrl = `${API_CONFIG.BACKEND_BASE_URL
-                      }/proxy?url=${encodeURIComponent(correctedUrl)}`;
+                    // 直接访问文件服务器，不走代理
+                    const directUrl = getDirectFileUrl(correctedUrl);
                     return (
                       <div
                         key={i}
                         className="border border-gray-200 dark:border-gray-700 rounded overflow-hidden bg-white dark:bg-black"
                       >
                         {f.isImage ? (
-                          <a href={proxiedUrl} target="_blank" rel="noreferrer">
+                          <a href={directUrl} target="_blank" rel="noreferrer">
                             <img
-                              src={proxiedUrl}
+                              src={directUrl}
                               alt={f.name}
                               className="w-full h-28 object-contain bg-white dark:bg-black"
+                              onError={(e) => {
+                                // 图片加载失败时尝试使用代理
+                                const target = e.target as HTMLImageElement;
+                                if (!target.src.includes("/proxy?url=")) {
+                                  target.src = `${API_CONFIG.BACKEND_BASE_URL}/proxy?url=${encodeURIComponent(correctedUrl)}`;
+                                }
+                              }}
                             />
                           </a>
                         ) : (
                           <a
-                            href={proxiedUrl}
+                            href={directUrl}
                             target="_blank"
                             rel="noreferrer"
                             className="block p-2 text-xs truncate hover:bg-gray-50 dark:hover:bg-gray-900"
@@ -414,7 +446,7 @@ export function useMessageRenderer({
                             {f.name}
                           </div>
                           <a
-                            href={proxiedUrl}
+                            href={directUrl}
                             download
                             className="text-[10px] text-blue-600 hover:underline"
                           >
