@@ -41,6 +41,7 @@ type LeftPanelProps = {
   currentSessionId: string | null;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
+  onDeleteAllSessions?: () => void;
 };
 
 export function LeftPanel({
@@ -63,6 +64,7 @@ export function LeftPanel({
   currentSessionId,
   onSelectSession,
   onDeleteSession,
+  onDeleteAllSessions,
 }: LeftPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -250,6 +252,7 @@ export function LeftPanel({
           currentSessionId={currentSessionId || ""}
           onSelectSession={onSelectSession}
           onDeleteSession={onDeleteSession}
+          onDeleteAllSessions={onDeleteAllSessions}
         />
       </div>
     </div>

@@ -22,6 +22,7 @@ type HistoryPanelProps = {
   currentSessionId: string;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
+  onDeleteAllSessions?: () => void;
 };
 
 export function HistoryPanel({
@@ -29,8 +30,10 @@ export function HistoryPanel({
   currentSessionId,
   onSelectSession,
   onDeleteSession,
+  onDeleteAllSessions,
 }: HistoryPanelProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<string | null>(null);
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
@@ -65,15 +68,55 @@ export function HistoryPanel({
     setDeleteDialogOpen(null);
   };
 
+  const handleDeleteAll = () => {
+    if (onDeleteAllSessions) {
+      onDeleteAllSessions();
+    }
+    setDeleteAllDialogOpen(false);
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 h-12 shrink-0">
         <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">
           历史会话
         </h2>
-        <span className="text-xs text-gray-400 dark:text-gray-500">
-          {sessions.length} 个会话
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            {sessions.length} 个会话
+          </span>
+          {sessions.length > 0 && onDeleteAllSessions && (
+            <AlertDialog open={deleteAllDialogOpen} onOpenChange={setDeleteAllDialogOpen}>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                  title="删除全部会话"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>删除全部会话？</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    确定要删除所有 {sessions.length} 个会话吗？此操作不可撤销。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-red-600 hover:bg-red-700"
+                    onClick={handleDeleteAll}
+                  >
+                    确认删除全部
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
       </div>
 
       <ScrollArea className="flex-1 min-h-0 h-0">

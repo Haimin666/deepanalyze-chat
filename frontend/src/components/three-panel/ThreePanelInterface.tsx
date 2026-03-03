@@ -389,6 +389,39 @@ export function ThreePanelInterface() {
     [deleteSession, currentSessionId, createNewSession, clearChat, toast]
   );
 
+  // 删除全部会话
+  const handleDeleteAllSessions = useCallback(
+    async () => {
+      if (sessions.length === 0) {
+        toast({ description: "没有可删除的会话" });
+        return;
+      }
+
+      try {
+        // 并行删除所有会话
+        const deletePromises = sessions.map((session) =>
+          authFetch(`${API_URLS.SESSIONS}/${session.id}`, {
+            method: "DELETE",
+          })
+        );
+
+        await Promise.all(deletePromises);
+
+        // 清空内存中的会话
+        clearAllSessions();
+        // 创建新会话
+        createNewSession();
+        clearChat();
+
+        toast({ description: `已删除全部 ${sessions.length} 个会话` });
+      } catch (error) {
+        console.error("Delete all sessions error:", error);
+        toast({ description: "删除失败", variant: "destructive" });
+      }
+    },
+    [sessions, clearAllSessions, createNewSession, clearChat, toast]
+  );
+
   // 导出 PDF 报告
   const exportReportPDF = useCallback(async () => {
     try {
@@ -701,6 +734,7 @@ export function ThreePanelInterface() {
               currentSessionId={currentSessionId}
               onSelectSession={handleSelectSession}
               onDeleteSession={handleDeleteSession}
+              onDeleteAllSessions={handleDeleteAllSessions}
             />
           </ResizablePanel>
 
