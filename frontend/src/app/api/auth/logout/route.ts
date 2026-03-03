@@ -33,9 +33,10 @@ export async function POST(request: NextRequest) {
 
     const data = await response.json();
 
-    // 清除本地 cookie
+    // 清除本地 cookie（token 和用户信息）
     const res = NextResponse.json(data);
     res.cookies.delete("auth_token");
+    res.cookies.delete("user_info");
 
     return res;
   } catch (error) {
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
     // 即使后端失败，也清除本地 cookie
     const res = NextResponse.json({ success: true, message: "已成功登出" });
     res.cookies.delete("auth_token");
+    res.cookies.delete("user_info");
     return res;
   }
 }

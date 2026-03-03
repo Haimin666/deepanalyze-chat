@@ -47,6 +47,7 @@ interface AuthState {
   setSessionTimeout: (minutes: number) => void;
   restoreSession: (user: User) => void;
   setInitialized: (initialized: boolean) => void;
+  restoreFromCookie: () => boolean;
 }
 
 // 会话状态接口 - 纯内存，不持久化
@@ -62,6 +63,22 @@ interface SessionState {
   updateSession: (id: string, data: Partial<ChatSession>) => void;
   setHasMessages: (has: boolean) => void;
   clearAllSessions: () => void;
+}
+
+function parseUserFromCookie(): User | null {
+  if (typeof document === 'undefined') return null;
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'user_info' && value) {
+      try {
+        return JSON.parse(decodeURIComponent(value));
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 // 认证 Store - 支持从 cookie 恢复
@@ -122,6 +139,21 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   setInitialized: (initialized: boolean) => {
     set({ initialized });
+  },
+
+  // 从 cookie 恢复用户信息（无需调用后端 API）
+  restoreFromCookie: () => {
+    const user = parseUserFromCookie();
+    if (user) {
+      set({
+        isAuthenticated: true,
+        user,
+        lastActivity: Date.now(),
+        initialized: true,
+      });
+      return true;
+    }
+    return false;
   },
 }));
 

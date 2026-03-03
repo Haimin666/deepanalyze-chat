@@ -11,6 +11,7 @@ type ContextMenuProps = {
   onOpenNode: (node: WorkspaceNode) => void;
   onMoveToDir: (srcPath: string, dstDir: string) => void;
   onDeleteConfirm: (path: string, isDir: boolean) => void;
+  onDownloadFile: (name: string, url: string) => void;
 };
 
 export function ContextMenu({
@@ -20,10 +21,19 @@ export function ContextMenu({
   onOpenNode,
   onMoveToDir,
   onDeleteConfirm,
+  onDownloadFile,
 }: ContextMenuProps) {
   const { toast } = useToast();
 
   if (!contextPos || !contextTarget) return null;
+
+  // 处理下载
+  const handleDownload = () => {
+    if (contextTarget.download_url) {
+      onDownloadFile(contextTarget.name, contextTarget.download_url);
+      onClose();
+    }
+  };
 
   return (
     <div
@@ -56,14 +66,12 @@ export function ContextMenu({
         </button>
       )}
       {!contextTarget.is_dir && contextTarget.download_url && (
-        <a
-          className="block px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800"
-          href={contextTarget.download_url}
-          download={contextTarget.name}
-          onClick={onClose}
+        <button
+          className="block w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800"
+          onClick={handleDownload}
         >
           下载
-        </a>
+        </button>
       )}
       <button
         className="block w-full text-left px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800"

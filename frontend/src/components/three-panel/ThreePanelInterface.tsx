@@ -61,6 +61,7 @@ export function ThreePanelInterface() {
   const setSessionTimeout = useAuthStore((state) => state.setSessionTimeout);
   const initialized = useAuthStore((state) => state.initialized);
   const setInitialized = useAuthStore((state) => state.setInitialized);
+  const restoreFromCookie = useAuthStore((state) => state.restoreFromCookie);
 
   // 会话历史状态 - 纯内存
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -108,14 +109,29 @@ export function ThreePanelInterface() {
           }
         }
 
-        // 2. 尝试从 cookie 恢复登录状态
-        const meRes = await fetch('/api/auth/me', {
-          credentials: 'include',
-        });
+        // 2. 优先从 cookie 恢复用户信息
+        const restoredFromCookie = restoreFromCookie();
+        
+        if (restoredFromCookie) {
+          // 用户信息已从 cookie 恢复，验证 token 是否仍然有效
+          const meRes = await fetch('/api/auth/me', {
+            credentials: 'include',
+          });
+          
+          if (!meRes.ok) {
+            // Token 无效，清除用户信息
+            logout();
+          }
+        } else {
+          // Cookie 中没有用户信息，尝试从后端获取
+          const meRes = await fetch('/api/auth/me', {
+            credentials: 'include',
+          });
 
-        if (meRes.ok) {
-          const user = await meRes.json();
-          restoreSession(user);
+          if (meRes.ok) {
+            const user = await meRes.json();
+            restoreSession(user);
+          }
         }
       } catch (error) {
         console.error('Failed to restore session:', error);
@@ -125,7 +141,7 @@ export function ThreePanelInterface() {
     };
 
     initAuth();
-  }, [initialized, restoreSession, setSessionTimeout, setInitialized]);
+  }, [initialized, restoreFromCookie, restoreSession, setSessionTimeout, setInitialized, logout]);
 
   // 从后端加载用户的会话列表
   const loadUserSessions = useCallback(async () => {
@@ -807,6 +823,7 @@ export function ThreePanelInterface() {
         onOpenNode={openNode}
         onMoveToDir={moveToDir}
         onDeleteConfirm={onDeleteConfirm}
+        onDownloadFile={downloadFileByUrl}
       />
 
       {/* 全局删除确认弹窗 */}
