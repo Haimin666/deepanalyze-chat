@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback } from "react";
 import { Tree } from "react-arborist";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Trash2, Upload, GripHorizontal } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 import { WorkspaceTreeRow } from "./WorkspaceTreeRow";
 import { HistoryPanel } from "./HistoryPanel";
 import { WorkspaceNode, ArborNode } from "./types";
@@ -65,10 +65,7 @@ export function LeftPanel({
   onDeleteSession,
 }: LeftPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const treeContentRef = useRef<HTMLDivElement>(null);
-  const [splitRatio, setSplitRatio] = useState(0.5);
-  const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
 
   // 处理清空工作区
@@ -77,46 +74,13 @@ export function LeftPanel({
     setClearDialogOpen(false);
   }, [onClearWorkspace]);
 
-  // 处理拖拽分割线
-  const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDraggingSplit(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isDraggingSplit) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current) return;
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const newRatio = (e.clientY - containerRect.top) / containerRect.height;
-      const clampedRatio = Math.max(0.2, Math.min(0.8, newRatio));
-      setSplitRatio(clampedRatio);
-    };
-
-    const handleMouseUp = () => {
-      setIsDraggingSplit(false);
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isDraggingSplit]);
-
-  const topHeight = splitRatio * 100;
-  const bottomHeight = (1 - splitRatio) * 100;
-
-  // 计算文件树的实际可用高度
-  const treeHeight = treeSize.h ? treeSize.h * splitRatio - 120 : 200;
+  // 历史会话固定高度
+  const historyPanelHeight = 180;
 
   return (
-    <div ref={containerRef} className="flex flex-col min-h-0 min-w-0 h-full">
-      {/* 上半部分：文件树 */}
-      <div style={{ height: `${topHeight}%` }} className="flex flex-col min-h-0">
+    <div className="flex flex-col min-h-0 min-w-0 h-full">
+      {/* 上半部分：文件树 - 自动填充剩余空间 */}
+      <div className="flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 h-12 shrink-0">
           <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">
             Files
@@ -208,7 +172,7 @@ export function LeftPanel({
             <div ref={treeContentRef}>
               <Tree
                 width={treeSize.w || 300}
-                height={treeHeight}
+                height={treeSize.h ? treeSize.h - historyPanelHeight - 120 : 200}
                 data={toArbor(workspaceTree).children || []}
                 openByDefault
                 indent={14}
@@ -235,16 +199,11 @@ export function LeftPanel({
         </div>
       </div>
 
-      {/* 可拖动分割线 */}
+      {/* 下半部分：历史会话 - 固定高度 */}
       <div
-        className="h-1.5 flex items-center justify-center cursor-row-resize bg-gray-100 dark:bg-gray-900 hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors group"
-        onMouseDown={handleSplitMouseDown}
+        style={{ height: historyPanelHeight }}
+        className="shrink-0 flex flex-col overflow-hidden border-t border-gray-200 dark:border-gray-800"
       >
-        <GripHorizontal className="h-3 w-6 text-gray-400 dark:text-gray-600 group-hover:text-gray-500 dark:group-hover:text-gray-500" />
-      </div>
-
-      {/* 下半部分：历史会话 */}
-      <div style={{ height: `${bottomHeight}%` }} className="min-h-0 flex flex-col overflow-hidden">
         <HistoryPanel
           sessions={sessions}
           currentSessionId={currentSessionId || ""}
