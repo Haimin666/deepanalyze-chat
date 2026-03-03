@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   keywords: ["DeepAnalyze", "数据分析", "Python", "AI", "Next.js", "TypeScript"],
   authors: [{ name: "DeepAnalyze Team" }],
   icons: {
-    icon: "/logo.svg",
+    icon: "/logo.ico",
   },
   openGraph: {
     title: "DeepAnalyze - 数据分析助手",

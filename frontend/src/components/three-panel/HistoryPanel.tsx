@@ -79,7 +79,7 @@ export function HistoryPanel({
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 h-12 shrink-0">
         <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">
-          历史会话
+          History
         </h2>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400 dark:text-gray-500">
