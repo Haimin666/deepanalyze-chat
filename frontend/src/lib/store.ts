@@ -45,6 +45,7 @@ interface AuthState {
   sessionTimeout: number; // 毫秒
   initialized: boolean; // 是否已初始化
   timedOut: boolean; // 是否因超时而登出
+  requestAdminPage: boolean; // 请求打开管理员页面
   login: (user: User, token: string) => void;
   logout: () => void;
   checkTimeout: () => boolean;
@@ -54,6 +55,8 @@ interface AuthState {
   setInitialized: (initialized: boolean) => void;
   restoreFromCookie: () => { restored: boolean; timedOut: boolean };
   clearTimedOut: () => void;
+  openAdminPage: () => void;
+  clearAdminRequest: () => void;
 }
 
 // 会话状态接口 - 纯内存，不持久化
@@ -121,6 +124,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   sessionTimeout: 10 * 60 * 1000, // 默认 10 分钟
   initialized: false,
   timedOut: false,
+  requestAdminPage: false,
 
   login: (user, token) => {
     const now = Date.now();
@@ -190,6 +194,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   clearTimedOut: () => {
     set({ timedOut: false });
+  },
+
+  openAdminPage: () => {
+    set({ requestAdminPage: true });
+  },
+
+  clearAdminRequest: () => {
+    set({ requestAdminPage: false });
   },
 
   // 从 cookie 恢复用户信息（无需调用后端 API）

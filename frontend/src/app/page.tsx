@@ -12,7 +12,7 @@ const ThreePanelInterface = dynamic(
   { ssr: false }
 );
 
-type View = 'login' | 'main' | 'admin';
+type View = 'loading' | 'login' | 'main' | 'admin';
 
 // 用于同步获取 mounted 状态
 const emptySubscribe = () => () => {};
@@ -26,30 +26,80 @@ function useMounted() {
 }
 
 export default function Home() {
-  const { isAuthenticated, user, logout, checkTimeout } = useAuthStore();
-  const [view, setView] = useState<View>('login');
+  const { 
+    isAuthenticated, 
+    user, 
+    restoreFromCookie, 
+    setInitialized, 
+    initialized,
+    requestAdminPage,
+    clearAdminRequest,
+    timedOut,
+    clearTimedOut,
+  } = useAuthStore();
+  const [view, setView] = useState<View>('loading');
   const mounted = useMounted();
 
-  // 认证状态检查
+  // 初始化：从 cookie 恢复登录状态
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || initialized) return;
 
-    // 使用 setTimeout 避免 lint 警告
+    const initAuth = async () => {
+      // 尝试从 cookie 恢复用户信息
+      const result = restoreFromCookie();
+      
+      if (result.timedOut) {
+        // 超时，需要重新登录
+        setView('login');
+      } else if (result.restored) {
+        // 成功恢复，进入主界面
+        setView('main');
+      } else {
+        // 没有保存的用户信息，显示登录页
+        setView('login');
+      }
+      
+      setInitialized(true);
+    };
+
+    initAuth();
+  }, [mounted, initialized, restoreFromCookie, setInitialized]);
+
+  // 监听认证状态变化
+  useEffect(() => {
+    if (!initialized) return;
+    
+    // 使用 setTimeout 避免在 effect 中同步调用 setState
     const timer = setTimeout(() => {
-      if (isAuthenticated) {
-        if (checkTimeout()) {
-          logout();
-          setView('login');
-        } else {
-          setView('main');
-        }
+      if (isAuthenticated && user) {
+        setView('main');
       } else {
         setView('login');
       }
     }, 0);
-
+    
     return () => clearTimeout(timer);
-  }, [mounted, isAuthenticated, checkTimeout, logout]);
+  }, [initialized, isAuthenticated, user]);
+
+  // 监听管理员页面请求
+  useEffect(() => {
+    if (requestAdminPage && user?.role === 'admin') {
+      // 使用 setTimeout 避免在 effect 中同步调用 setState
+      const timer = setTimeout(() => {
+        setView('admin');
+        clearAdminRequest();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [requestAdminPage, user, clearAdminRequest]);
+
+  // 显示超时提示
+  useEffect(() => {
+    if (timedOut && view === 'login') {
+      // 可以在这里显示 toast，但需要 toast provider
+      clearTimedOut();
+    }
+  }, [timedOut, view, clearTimedOut]);
 
   const handleLoginSuccess = useCallback(() => {
     setView('main');
@@ -59,8 +109,8 @@ export default function Home() {
     setView('main');
   }, []);
 
-  // 等待挂载
-  if (!mounted) {
+  // 等待挂载或初始化
+  if (!mounted || !initialized) {
     return (
       <div className="min-h-screen bg-white dark:bg-black flex items-center justify-center">
         <div className="flex items-center gap-2 text-gray-500">

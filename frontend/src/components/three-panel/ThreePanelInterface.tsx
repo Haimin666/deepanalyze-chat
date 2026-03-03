@@ -22,9 +22,6 @@ import {
   useAuthStore,
   useSessionStore,
 } from "@/lib/store";
-import { LoginPage } from "@/components/auth/LoginPage";
-import { AdminPage } from "@/components/auth/AdminPage";
-import { Loader2 } from "lucide-react";
 
 // 直接从各个文件导入，避免循环依赖
 import { LeftPanel } from "./LeftPanel";
@@ -45,11 +42,8 @@ import { ensureGeneratedInUrl } from "./url-utils";
 import { UserAvatar } from "./UserAvatar";
 import type { Message } from "./types";
 
-type AppView = "login" | "main" | "admin" | "loading";
-
 export function ThreePanelInterface() {
   const { toast } = useToast();
-  const [view, setView] = useState<AppView>("loading");
 
   // Auth 状态
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -57,13 +51,11 @@ export function ThreePanelInterface() {
   const logout = useAuthStore((state) => state.logout);
   const checkTimeout = useAuthStore((state) => state.checkTimeout);
   const updateActivity = useAuthStore((state) => state.updateActivity);
-  const restoreSession = useAuthStore((state) => state.restoreSession);
   const setSessionTimeout = useAuthStore((state) => state.setSessionTimeout);
   const initialized = useAuthStore((state) => state.initialized);
-  const setInitialized = useAuthStore((state) => state.setInitialized);
-  const restoreFromCookie = useAuthStore((state) => state.restoreFromCookie);
   const timedOut = useAuthStore((state) => state.timedOut);
   const clearTimedOut = useAuthStore((state) => state.clearTimedOut);
+  const openAdminPage = useAuthStore((state) => state.openAdminPage);
 
   // 会话历史状态 - 纯内存
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -96,13 +88,10 @@ export function ThreePanelInterface() {
   // 用户变化时重新加载数据
   const prevUserIdRef = useRef<string | null>(null);
 
-  // 初始化：从 cookie 恢复登录状态
+  // 获取配置的超时时间
   useEffect(() => {
-    if (initialized) return;
-
-    const initAuth = async () => {
+    const fetchConfig = async () => {
       try {
-        // 1. 获取配置的超时时间
         const configRes = await fetch('/api/auth/config');
         if (configRes.ok) {
           const config = await configRes.json();
@@ -110,46 +99,15 @@ export function ThreePanelInterface() {
             setSessionTimeout(config.sessionTimeoutMinutes);
           }
         }
-
-        // 2. 优先从 cookie 恢复用户信息
-        const result = restoreFromCookie();
-        
-        if (result.timedOut) {
-          // 因超时而登出，不需要调用后端 API
-          // toast 会由下面的 useEffect 处理
-          return;
-        }
-        
-        if (result.restored) {
-          // 用户信息已从 cookie 恢复，验证 token 是否仍然有效
-          const meRes = await fetch('/api/auth/me', {
-            credentials: 'include',
-          });
-          
-          if (!meRes.ok) {
-            // Token 无效，清除用户信息
-            logout();
-          }
-        } else {
-          // Cookie 中没有用户信息，尝试从后端获取
-          const meRes = await fetch('/api/auth/me', {
-            credentials: 'include',
-          });
-
-          if (meRes.ok) {
-            const user = await meRes.json();
-            restoreSession(user);
-          }
-        }
       } catch (error) {
-        console.error('Failed to restore session:', error);
-      } finally {
-        setInitialized(true);
+        console.error('Failed to fetch config:', error);
       }
     };
-
-    initAuth();
-  }, [initialized, restoreFromCookie, restoreSession, setSessionTimeout, setInitialized, logout]);
+    
+    if (initialized) {
+      fetchConfig();
+    }
+  }, [initialized, setSessionTimeout]);
 
   // 从后端加载用户的会话列表
   const loadUserSessions = useCallback(async () => {
@@ -173,19 +131,11 @@ export function ThreePanelInterface() {
     }
   }, [setSessions]);
 
-  // 检查登录状态和超时
+  // 加载用户数据
   useEffect(() => {
-    // 未初始化完成时保持 loading 状态
-    if (!initialized) {
-      setView("loading");
-      return;
-    }
-
+    if (!initialized) return;
+    
     if (isAuthenticated && currentUser) {
-      // 初始化完成后，不立即检查超时，让用户可以正常使用
-      // 超时检查由活动检测的 interval 负责
-      setView("main");
-      
       // 检查用户是否变化
       if (prevUserIdRef.current !== currentUser.id) {
         // 用户变化，清空旧数据并加载新用户数据
@@ -194,14 +144,13 @@ export function ThreePanelInterface() {
         prevUserIdRef.current = currentUser.id;
       }
     } else {
-      setView("login");
       // 清空会话数据
       if (prevUserIdRef.current) {
         clearAllSessions();
         prevUserIdRef.current = null;
       }
     }
-  }, [initialized, isAuthenticated, currentUser, toast, clearAllSessions, loadUserSessions]);
+  }, [initialized, isAuthenticated, currentUser, clearAllSessions, loadUserSessions]);
 
   // 处理超时提示
   useEffect(() => {
@@ -216,7 +165,7 @@ export function ThreePanelInterface() {
 
   // 活动检测 - 更新最后活动时间
   useEffect(() => {
-    if (view !== "main") return;
+    if (!isAuthenticated) return;
 
     const events = ["mousedown", "keydown", "scroll", "touchstart"];
     const handleActivity = () => updateActivity();
@@ -227,14 +176,8 @@ export function ThreePanelInterface() {
 
     // 定期检查超时
     const interval = setInterval(() => {
-      const isTimeout = checkTimeout();
-      if (isTimeout) {
-        setView("login");
-        toast({
-          description: "由于长时间未操作，已自动退出登录",
-          variant: "destructive",
-        });
-      }
+      checkTimeout();
+      // 超时后的 toast 提示由另一个 useEffect 处理
     }, 60000); // 每分钟检查一次
 
     return () => {
@@ -243,7 +186,7 @@ export function ThreePanelInterface() {
       });
       clearInterval(interval);
     };
-  }, [view, updateActivity, checkTimeout, toast]);
+  }, [isAuthenticated, updateActivity, checkTimeout]);
 
   // 折叠状态管理
   const {
@@ -723,42 +666,8 @@ export function ThreePanelInterface() {
 
   // 用户头像组件
   const userAvatarElement = (
-    <UserAvatar onOpenAdmin={() => setView("admin")} />
+    <UserAvatar onOpenAdmin={() => openAdminPage()} />
   );
-
-  // 加载中页面
-  if (view === "loading") {
-    return (
-      <div className="min-h-screen bg-white dark:bg-black flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-          <p className="text-sm text-gray-500">加载中...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 登录页面
-  if (view === "login") {
-    return (
-      <LoginPage
-        onLoginSuccess={() => setView("main")}
-        isDarkMode={isDarkMode}
-        onToggleTheme={toggleTheme}
-      />
-    );
-  }
-
-  // 管理员页面
-  if (view === "admin") {
-    return (
-      <AdminPage
-        onBack={() => setView("main")}
-        isDarkMode={isDarkMode}
-        onToggleTheme={toggleTheme}
-      />
-    );
-  }
 
   // 主界面
   return (
