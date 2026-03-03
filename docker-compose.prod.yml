@@ -1,0 +1,37 @@
+# ============================================
+# DeepAnalyze - Production Docker Compose Override
+# ============================================
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# ============================================
+
+services:
+  mysql:
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  app:
+    restart: always
+    environment:
+      USE_MOCK_LLM: "false"
+      LOG_LEVEL: WARNING
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+      replicas: 1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8200/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

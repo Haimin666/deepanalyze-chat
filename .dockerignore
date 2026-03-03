@@ -1,0 +1,70 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# Development files
+*.log
+*.pid
+*.seed
+*.pid.lock
+.npm
+.eslintcache
+.node_repl_history
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.docker/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Test files
+coverage/
+.nyc_output/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Misc
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+.workspace/
+workspace/
+logs/

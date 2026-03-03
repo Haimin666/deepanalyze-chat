@@ -115,13 +115,19 @@ function clearLastActivityFromStorage(): void {
   localStorage.removeItem(LAST_ACTIVITY_KEY);
 }
 
+// 从环境变量获取会话超时时间（分钟）
+const SESSION_TIMEOUT_MINUTES = parseInt(
+  process.env.NEXT_PUBLIC_SESSION_TIMEOUT_MINUTES || "10",
+  10
+);
+
 // 认证 Store - 支持从 cookie 恢复
 export const useAuthStore = create<AuthState>()((set, get) => ({
   isAuthenticated: false,
   user: null,
   token: null,
   lastActivity: Date.now(),
-  sessionTimeout: 10 * 60 * 1000, // 默认 10 分钟
+  sessionTimeout: SESSION_TIMEOUT_MINUTES * 60 * 1000, // 从环境变量读取
   initialized: false,
   timedOut: false,
   requestAdminPage: false,
