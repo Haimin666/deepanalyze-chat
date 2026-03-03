@@ -87,14 +87,14 @@ export function HistoryPanel({
             sessions.map((session) => (
               <div
                 key={session.id}
-                className={`group relative rounded-lg p-3 cursor-pointer transition-colors ${
+                className={`group relative rounded-lg p-3 pr-10 cursor-pointer transition-colors ${
                   currentSessionId === session.id
                     ? "bg-gray-100 dark:bg-gray-800"
                     : "hover:bg-gray-50 dark:hover:bg-gray-900"
                 }`}
                 onClick={() => onSelectSession(session.id)}
               >
-                <div className="flex items-start gap-2 w-full">
+                <div className="flex items-start gap-2 w-full min-w-0">
                   <MessageSquare className="h-4 w-4 mt-0.5 text-gray-400 dark:text-gray-500 shrink-0" />
                   <div className="flex-1 min-w-0 overflow-hidden">
                     <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
@@ -114,51 +114,51 @@ export function HistoryPanel({
                       </span>
                     </div>
                   </div>
-                  
-                  {/* 删除按钮 - 鼠标悬停时显示 */}
-                  <div 
-                    className="shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-150" 
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <AlertDialog open={deleteDialogOpen === session.id} onOpenChange={(open) => {
-                      if (!open) setDeleteDialogOpen(null);
-                    }}>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                </div>
+
+                {/* 删除按钮 - 绝对定位，鼠标悬停时显示 */}
+                <div
+                  className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <AlertDialog open={deleteDialogOpen === session.id} onOpenChange={(open) => {
+                    if (!open) setDeleteDialogOpen(null);
+                  }}>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteDialogOpen(session.id);
+                        }}
+                        title="删除会话"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>删除会话？</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          确定要删除会话 "{session.title || "新会话"}" 吗？此操作不可撤销。
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={(e) => e.stopPropagation()}>取消</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-red-600 hover:bg-red-700"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setDeleteDialogOpen(session.id);
+                            handleDelete(session.id);
                           }}
-                          title="删除会话"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>删除会话？</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            确定要删除会话 "{session.title || "新会话"}" 吗？此操作不可撤销。
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel onClick={(e) => e.stopPropagation()}>取消</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-red-600 hover:bg-red-700"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(session.id);
-                            }}
-                          >
-                            确认删除
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                          确认删除
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             ))
