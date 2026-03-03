@@ -244,7 +244,7 @@ export function LeftPanel({
       </div>
 
       {/* 下半部分：历史会话 */}
-      <div style={{ height: `${bottomHeight}%` }} className="min-h-0">
+      <div style={{ height: `${bottomHeight}%` }} className="min-h-0 flex flex-col overflow-hidden">
         <HistoryPanel
           sessions={sessions}
           currentSessionId={currentSessionId || ""}

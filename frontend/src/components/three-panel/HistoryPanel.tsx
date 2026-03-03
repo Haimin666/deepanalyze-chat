@@ -66,7 +66,7 @@ export function HistoryPanel({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 h-12 shrink-0">
         <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">
           历史会话
@@ -76,7 +76,7 @@ export function HistoryPanel({
         </span>
       </div>
 
-      <ScrollArea className="flex-1 min-h-0">
+      <ScrollArea className="flex-1 min-h-0 h-0">
         <div className="p-2 space-y-1">
           {sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-gray-400 dark:text-gray-600">
