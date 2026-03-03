@@ -94,27 +94,7 @@ export function HistoryPanel({
                 }`}
                 onClick={() => onSelectSession(session.id)}
               >
-                <MessageSquare className="h-4 w-4 mt-0.5 text-gray-400 dark:text-gray-500 shrink-0" />
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-                    {session.title || "新会话"}
-                  </p>
-                  {session.preview && (
-                    <p className="text-xs text-gray-500 dark:text-gray-500 truncate mt-0.5">
-                      {session.preview}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
-                      {formatDate(session.updatedAt)}
-                    </span>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
-                      · {session.messageCount || 0} 条消息
-                    </span>
-                  </div>
-                </div>
-
-                {/* 删除按钮 - flex布局，鼠标悬停时显示 */}
+                {/* 删除按钮 - flex布局，鼠标悬停时显示在左侧 */}
                 <div
                   className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                   onClick={(e) => e.stopPropagation()}
@@ -157,6 +137,26 @@ export function HistoryPanel({
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                </div>
+
+                <MessageSquare className="h-4 w-4 mt-0.5 text-gray-400 dark:text-gray-500 shrink-0" />
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                    {session.title || "新会话"}
+                  </p>
+                  {session.preview && (
+                    <p className="text-xs text-gray-500 dark:text-gray-500 truncate mt-0.5">
+                      {session.preview}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {formatDate(session.updatedAt)}
+                    </span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      · {session.messageCount || 0} 条消息
+                    </span>
+                  </div>
                 </div>
               </div>
             ))
