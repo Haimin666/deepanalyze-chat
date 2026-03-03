@@ -77,7 +77,7 @@ export function HistoryPanel({
       </div>
 
       <ScrollArea className="flex-1 min-h-0 h-0">
-        <div className="p-2 space-y-1 min-w-[180px]">
+        <div className="p-2 space-y-1">
           {sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-gray-400 dark:text-gray-600">
               <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
@@ -87,7 +87,7 @@ export function HistoryPanel({
             sessions.map((session) => (
               <div
                 key={session.id}
-                className={`group relative rounded-lg p-3 pr-10 cursor-pointer transition-colors w-full min-w-[160px] ${
+                className={`group relative rounded-lg p-3 pr-10 cursor-pointer transition-colors ${
                   currentSessionId === session.id
                     ? "bg-gray-100 dark:bg-gray-800"
                     : "hover:bg-gray-50 dark:hover:bg-gray-900"
