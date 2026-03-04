@@ -67,7 +67,7 @@ export const WorkspaceTreeRow = ({
   };
 
   return (
-    <div style={style}>
+    <div style={style} className="relative z-0">
       {/* Generated 分组标题 + 删除按钮 */}
       {isGeneratedFolder && (
         <div className="mt-2 mb-1 px-2 flex items-center justify-between select-none">
@@ -108,7 +108,7 @@ export const WorkspaceTreeRow = ({
       )}
 
       <div
-        className={`group relative flex items-center hover:bg-gray-50 dark:hover:bg-gray-900 rounded px-2 py-1 pr-16 cursor-pointer ${
+        className={`group relative flex items-center hover:bg-gray-50 dark:hover:bg-gray-900 rounded px-2 py-1 pr-10 cursor-pointer z-10 hover:z-30 ${
           isGenerated ? "bg-purple-50 dark:bg-purple-950/20" : ""
         }`}
         onClick={(e) => {
@@ -190,7 +190,7 @@ export const WorkspaceTreeRow = ({
 
         {/* 操作按钮组 - 绝对定位，鼠标悬停时显示 */}
         {!isGeneratedFolder && (
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-white dark:bg-gray-900 rounded shadow-sm z-40">
             {/* 下载按钮 - 仅文件显示 */}
             {!isDir && (
               <Button

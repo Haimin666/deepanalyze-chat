@@ -207,7 +207,7 @@ export function LeftPanel({
 
           {/* 文件树 */}
           {workspaceTree ? (
-            <div ref={treeContentRef}>
+            <div ref={treeContentRef} className="overflow-visible">
               <Tree
                 width={treeSize.w || 300}
                 height={treeHeight}
@@ -215,6 +215,7 @@ export function LeftPanel({
                 openByDefault
                 indent={14}
                 rowHeight={28}
+                overscan={5}
               >
                 {(props) => (
                   <WorkspaceTreeRow
