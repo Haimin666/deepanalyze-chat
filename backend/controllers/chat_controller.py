@@ -3,6 +3,7 @@
 """
 import json
 import re
+import os
 from fastapi import Body
 from fastapi.responses import StreamingResponse, JSONResponse
 
@@ -32,6 +33,12 @@ class ChatController:
 
         # 如果使用 mock 服务
         if self.use_mock and self.mock_service:
+            # 设置mock服务的工作目录，用于真实代码执行
+            workspace_dir = self.workspace_service.get_session_workspace(session_id, user_id)
+            generated_dir = os.path.join(workspace_dir, "generated")
+            os.makedirs(generated_dir, exist_ok=True)
+            self.mock_service.set_workspace(generated_dir)
+            
             def generate_mock():
                 for delta_content in self.mock_service.stream_response(
                     messages, stream_session_id

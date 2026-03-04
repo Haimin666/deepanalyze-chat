@@ -1,6 +1,7 @@
 """
 认证控制器
 处理用户登录、注册、Token验证等
+支持Token黑名单，退出登录时Token立即失效
 """
 from typing import Optional
 from fastapi import HTTPException, Header
@@ -60,23 +61,21 @@ class AuthController:
             createdAt=user.created_at.isoformat() + "Z" if user.created_at else ""
         )
 
-    async def logout(self, user_id: str) -> dict:
-        """用户登出"""
-        # 目前使用无状态JWT，登出只需前端清除Token
-        # 如需实现Token黑名单，可在此添加逻辑
-        return {"success": True, "message": "已退出登录"}
-
-    async def change_password(self, user_id: str, old_password: str, new_password: str) -> dict:
-        """修改密码"""
-        user = db_service.get_user_by_id(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="用户不存在")
+    async def logout(self, user: User, authorization: Optional[str] = Header(None)) -> dict:
+        """用户登出 - 将token加入黑名单使其立即失效"""
+        # 获取token
+        token = None
+        if authorization:
+            if authorization.startswith("Bearer "):
+                token = authorization[7:]
+            else:
+                token = authorization
         
-        if not db_service.verify_password(old_password, user.password_hash):
-            raise HTTPException(status_code=400, detail="原密码错误")
+        # 将token加入黑名单
+        if token:
+            db_service.add_token_to_blacklist(token, user.id, "logout")
         
-        db_service.update_user_password(user_id, new_password)
-        return {"success": True, "message": "密码修改成功"}
+        return {"success": True, "message": "已退出登录，Token已失效"}
 
 
 class UserController:
@@ -146,4 +145,8 @@ class UserController:
         success = db_service.update_user_password(user_id, new_password)
         if not success:
             raise HTTPException(status_code=404, detail="用户不存在")
-        return {"success": True, "message": "密码已重置"}
+        
+        # 撤销该用户的所有token（强制重新登录）
+        db_service.revoke_all_user_tokens(user_id, "password_reset")
+        
+        return {"success": True, "message": "密码已重置，用户需重新登录"}

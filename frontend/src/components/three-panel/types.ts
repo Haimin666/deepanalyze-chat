@@ -33,7 +33,7 @@ export type WorkspaceNode = {
   size?: number;
   extension?: string;
   icon?: string;
-  download_url?: string;
+  download_url?: string; // 下载链接
   children?: WorkspaceNode[];
   is_generated?: boolean; // 标识是否为代码生成的文件或文件夹
 };

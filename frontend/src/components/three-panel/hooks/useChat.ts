@@ -48,6 +48,7 @@ export function useChat(
   const setHasMessages = useSessionStore((state) => state.setHasMessages);
   const updateSession = useSessionStore((state) => state.updateSession);
   const sessions = useSessionStore((state) => state.sessions);
+  const setSessions = useSessionStore((state) => state.setSessions);
 
   // 保存消息到后端
   const saveMessageToBackend = useCallback(async (
@@ -87,34 +88,56 @@ export function useChat(
     }
   }, [updateSession]);
 
-  // 确保会话存在于后端
-  const ensureSessionExists = useCallback(async (sessionId: string) => {
+  // 确保会话存在于后端，并同步到前端store
+  const ensureSessionExists = useCallback(async (sid: string) => {
     try {
-      // 先检查会话是否存在
-      const checkResponse = await authFetch(`${API_URLS.SESSIONS}/${sessionId}`, {
-        method: "GET",
-      });
+      // 检查会话是否已存在于本地store
+      const sessionExistsInStore = sessions.some(s => s.id === sid);
       
-      if (checkResponse.ok) {
-        return true; // 会话已存在
+      if (sessionExistsInStore) {
+        // 会话已存在于store，检查后端是否存在
+        const checkResponse = await authFetch(`${API_URLS.SESSIONS}/${sid}`, {
+          method: "GET",
+        });
+        
+        if (checkResponse.ok) {
+          return true; // 会话已存在
+        }
       }
       
-      // 会话不存在，创建新会话
+      // 会话不存在于后端，创建新会话
       const createResponse = await authFetch(API_URLS.SESSIONS, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          id: sessionId, 
+          id: sid, 
           title: "新会话" 
         }),
       });
       
-      return createResponse.ok;
+      if (createResponse.ok) {
+        // 创建成功后，将新会话添加到store
+        if (!sessionExistsInStore) {
+          const newSession = {
+            id: sid,
+            title: "新会话",
+            messageCount: 0,
+            updatedAt: new Date().toISOString(),
+          };
+          // 检查是否已存在（避免重复添加）
+          if (!sessions.some(s => s.id === sid)) {
+            setSessions([newSession, ...sessions]);
+          }
+        }
+        return true;
+      }
+      
+      return false;
     } catch (error) {
       console.error("Error ensuring session exists:", error);
       return false;
     }
-  }, []);
+  }, [sessions, setSessions]);
 
   // 节流滚动到底部
   const scrollToBottom = useCallback((force: boolean = false) => {

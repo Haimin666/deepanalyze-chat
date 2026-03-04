@@ -1,0 +1,121 @@
+# ============================================
+# DeepAnalyze Backend Configuration
+# 后端配置文件
+# ============================================
+# 说明：所有配置项都可以通过环境变量覆盖
+# 环境变量命名规则：将配置项转换为大写，用下划线连接
+# 例如：database.host -> DATABASE_HOST
+# ============================================
+
+# ===================
+# 服务配置
+# ===================
+[server]
+# API 服务地址和端口
+host = "0.0.0.0"
+port = 8200
+# 调试模式 (true/false)
+debug = false
+# API 前缀
+api_prefix = ""
+
+# ===================
+# 数据库配置
+# ===================
+[database]
+# 数据库类型 (mysql/sqlite/postgresql)
+type = "mysql"
+# MySQL 配置
+host = "localhost"
+port = 3306
+user = "root"
+password = ""
+database = "deepanalyze"
+# 连接池配置
+pool_size = 10
+max_overflow = 20
+pool_recycle = 3600
+
+# ===================
+# JWT 认证配置
+# ===================
+[jwt]
+# JWT 密钥 (生产环境必须修改！)
+secret_key = "your-super-secret-key-change-in-production"
+# 算法
+algorithm = "HS256"
+# Token 有效期 (小时)
+expire_hours = 24
+
+# ===================
+# 会话配置
+# ===================
+[session]
+# 会话超时时间 (分钟)
+# 用户无操作超过此时间将自动退出
+timeout_minutes = 10
+
+# ===================
+# 文件服务器配置
+# ===================
+[file_server]
+# 文件服务器端口
+port = 8100
+# 文件服务器基础URL (用于生成下载链接)
+# 如果部署在服务器上，请修改为实际的访问地址
+base_url = "http://localhost:8100"
+
+# ===================
+# 工作区配置
+# ===================
+[workspace]
+# 工作区根目录
+base_dir = "workspace"
+# 单个会话最大存储空间 (MB)
+max_storage_mb = 500
+
+# ===================
+# AI/LLM 配置
+# ===================
+[llm]
+# 是否使用 Mock 模式 (开发测试用)
+use_mock = true
+# API 基础地址 (真实 LLM 服务)
+api_base = "http://localhost:8000/v1"
+# 模型路径
+model_path = "DeepAnalyze-8B"
+# 请求超时时间 (秒)
+timeout = 120
+
+# ===================
+# 代码执行配置
+# ===================
+[code_execution]
+# 执行超时时间 (秒)
+timeout = 120
+# 最大内存使用 (MB)
+max_memory_mb = 512
+
+# ===================
+# 日志配置
+# ===================
+[logging]
+# 日志级别 (DEBUG/INFO/WARNING/ERROR)
+level = "INFO"
+# 日志文件路径
+file = "logs/app.log"
+# 日志格式
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# ===================
+# 安全配置
+# ===================
+[security]
+# 是否启用 CORS
+cors_enabled = true
+# 允许的源 (逗号分隔)
+cors_origins = "http://localhost:3000,http://127.0.0.1:3000"
+# 是否启用速率限制
+rate_limit_enabled = false
+# 每分钟最大请求数
+rate_limit_requests = 100

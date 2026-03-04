@@ -1,12 +1,19 @@
 """
 Mock LLM 服务 - 模拟 AI 聊天响应
 用于开发和测试环境，无需真实 AI 模型
+支持真实代码执行，生成真实的执行结果和文件
 """
 import json
 import time
 import uuid
 import threading
-from typing import Generator, Dict, Optional, Callable
+import re
+import os
+import tempfile
+import subprocess
+import sys
+from typing import Generator, Dict, Optional, Callable, List
+from pathlib import Path
 
 # 停止会话管理器
 class StopSessionManager:
@@ -46,6 +53,100 @@ class StopSessionManager:
 stop_manager = StopSessionManager()
 
 
+class CodeExecutor:
+    """代码执行器 - 真实执行Python代码"""
+    
+    def __init__(self, workspace_dir: str = None, timeout: int = 60):
+        self.workspace_dir = workspace_dir or tempfile.gettempdir()
+        self.timeout = timeout
+        self.generated_files: List[Dict] = []
+    
+    def set_workspace(self, workspace_dir: str):
+        """设置工作目录"""
+        self.workspace_dir = workspace_dir
+        os.makedirs(workspace_dir, exist_ok=True)
+    
+    def execute_code(self, code: str) -> tuple:
+        """
+        执行Python代码并返回结果
+        
+        Returns:
+            tuple: (success: bool, output: str, generated_files: list)
+        """
+        if not code or not code.strip():
+            return False, "", []
+        
+        # 记录执行前的文件列表
+        files_before = set()
+        if os.path.exists(self.workspace_dir):
+            files_before = set(os.listdir(self.workspace_dir))
+        
+        tmp_path = None
+        try:
+            # 创建临时文件
+            fd, tmp_path = tempfile.mkstemp(suffix=".py", dir=self.workspace_dir)
+            os.close(fd)
+            
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(code)
+            
+            # 设置执行环境
+            env = os.environ.copy()
+            env["MPLBACKEND"] = "Agg"
+            env["QT_QPA_PLATFORM"] = "offscreen"
+            env.pop("DISPLAY", None)
+            
+            # 执行代码
+            result = subprocess.run(
+                [sys.executable, tmp_path],
+                cwd=self.workspace_dir,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=self.timeout,
+                env=env,
+            )
+            
+            output = (result.stdout or "") + (result.stderr or "")
+            success = result.returncode == 0
+            
+            # 检测新生成的文件
+            files_after = set()
+            if os.path.exists(self.workspace_dir):
+                files_after = set(os.listdir(self.workspace_dir))
+            
+            new_files = files_after - files_before
+            generated_files = []
+            
+            for fname in new_files:
+                if fname.endswith('.py') and fname == os.path.basename(tmp_path):
+                    continue  # 跳过临时执行的py文件
+                fpath = os.path.join(self.workspace_dir, fname)
+                if os.path.isfile(fpath):
+                    stat = os.stat(fpath)
+                    generated_files.append({
+                        "name": fname,
+                        "path": fpath,
+                        "size": stat.st_size,
+                        "extension": os.path.splitext(fname)[1].lower()
+                    })
+            
+            self.generated_files.extend(generated_files)
+            return success, output.strip(), generated_files
+            
+        except subprocess.TimeoutExpired:
+            return False, f"[Timeout]: 执行超时，超过 {self.timeout} 秒", []
+        except Exception as e:
+            return False, f"[Error]: {str(e)}", []
+        finally:
+            try:
+                if tmp_path and os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except:
+                pass
+
+
 # 问候回复
 GREETING_RESPONSE = """<Answer>
 你好！我是 DeepAnalyze AI 助手，很高兴为您服务！👋
@@ -67,39 +168,15 @@ GREETING_RESPONSE = """<Answer>
 </Answer>"""
 
 
-# 数据分析报告全流程响应
-DATA_ANALYSIS_FULL_RESPONSE = """<Analyze>
-用户需要生成一份数据分析报告，我将按照以下步骤进行：
-
-1. **数据理解** - 分析数据结构和特征
-2. **数据清洗** - 处理缺失值和异常值
-3. **探索性分析** - 统计描述和可视化
-4. **深度分析** - 发现数据规律和洞察
-5. **报告生成** - 输出专业分析报告
-</Analyze>
-
-<Understand>
-由于用户未提供具体数据文件，我将使用模拟数据演示完整的数据分析流程。
-
-我将创建一个销售数据示例，包含：
-- 📅 日期维度（全年数据）
-- 🏷️ 产品类别（5大品类）
-- 💰 销售金额（随机生成）
-- 🗺️ 地区分布（5大区域）
-- 📦 销售数量
-</Understand>
-
-<Code>
-```python
-import pandas as pd
+# 数据分析报告全流程响应模板 - 代码部分
+DATA_ANALYSIS_CODE_1 = '''import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
+import os
 
-# 设置中文字体
-font_path = '/usr/share/fonts/truetype/simhei/SimHei.ttf'
-fm.fontManager.addfont(font_path)
-plt.rcParams['font.sans-serif'] = ['SimHei'] 
+# 设置中文字体（尝试多种方式）
+plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans', 'Arial Unicode MS']
 plt.rcParams['axes.unicode_minus'] = False
 
 # 创建模拟销售数据
@@ -125,32 +202,9 @@ print("数据创建完成！")
 print(f"数据概览：")
 print(df.head(10).to_string())
 print(f"\\n数据形状：{df.shape}")
-```
-</Code>
+'''
 
-<Execute>
-```
-数据创建完成！
-数据概览：
-        日期   产品类别       销售金额   地区  销售数量  月份  季度
-2024-01-01  电子产品  25678.32  华东    234   1   1
-2024-01-02     服装  12345.67  华南    189   1   1
-2024-01-03     食品   8901.23  华北    312   1   1
-2024-01-04     家居  34567.89  西南    145   1   1
-2024-01-05     美妆  19876.54  西北    267   1   1
-2024-01-06  电子产品  28901.45  华东    198   1   1
-2024-01-07     服装  15678.90  华南    223   1   1
-2024-01-08     食品  11234.56  华北    287   1   1
-2024-01-09     家居  32109.87  西南    167   1   1
-2024-01-10     美妆  21456.78  西北    245   1   1
-
-数据形状：(366, 7)
-```
-</Execute>
-
-<Code>
-```python
-# 1. 数据概览和统计描述
+DATA_ANALYSIS_CODE_2 = '''# 1. 数据概览和统计描述
 print("=" * 50)
 print("数据统计描述")
 print("=" * 50)
@@ -174,64 +228,18 @@ print(region_stats)
 quarterly_stats = df.groupby('季度')['销售金额'].sum().round(2)
 print("\\n按季度统计：")
 print(quarterly_stats)
-```
-</Code>
+'''
 
-<Execute>
-```
-==================================================
-数据统计描述
-==================================================
-           销售金额      销售数量        月份        季度
-count   366.000000  366.000000  366.000000  366.000000
-mean  25432.156789  254.846995    6.500000    2.497268
-std   14123.456789  141.234567    3.456789    1.123456
-min    1023.450000   12.000000    1.000000    1.000000
-25%   12345.670000  134.000000    3.000000    1.000000
-50%   25432.120000  255.000000    6.500000    2.500000
-75%   38765.430000  376.000000   10.000000    4.000000
-max   49876.540000  499.000000   12.000000    4.000000
-
-按产品类别统计：
-            销售金额                              销售数量
-              sum      mean count       sum
-产品类别                                        
-电子产品  1892345.67  25890.12    73     18234
-服装     1456789.23  19956.78    73     18923
-食品      987654.32  13523.45    73     21456
-家居     2134567.89  29234.56    73     16789
-美妆     1234567.89  16912.45    73     20123
-
-按地区统计：
-             sum      mean  count
-地区                                
-华东  1892345.67  25890.12     73
-华南  1567890.12  21456.78     73
-华北  1345678.90  18423.45     73
-西南  1234567.89  16912.45     73
-西北  1567890.12  21456.78     73
-
-按季度统计：
-季度
-1    2345678.90
-2    2567890.12
-3    2234567.89
-4    2678901.23
-```
-</Execute>
-
-<Code>
-```python
-# 3. 数据可视化
+DATA_ANALYSIS_CODE_3 = '''# 3. 数据可视化
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
 # 3.1 产品类别销售金额柱状图
 ax1 = axes[0, 0]
 category_sales = df.groupby('产品类别')['销售金额'].sum().sort_values(ascending=True)
 colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']
-bars = ax1.barh(category_sales.index, category_sales.values, color=colors)
-ax1.set_xlabel('销售金额 (元)', fontsize=12)
-ax1.set_title('各产品类别销售金额', fontsize=14, fontweight='bold')
+bars = ax1.barh(category_sales.index.astype(str), category_sales.values, color=colors)
+ax1.set_xlabel('Sales Amount', fontsize=12)
+ax1.set_title('Sales by Product Category', fontsize=14, fontweight='bold')
 ax1.bar_label(bars, fmt='%.0f', padding=3)
 
 # 3.2 月度销售趋势
@@ -239,25 +247,25 @@ ax2 = axes[0, 1]
 monthly_sales = df.groupby('月份')['销售金额'].sum()
 ax2.plot(monthly_sales.index, monthly_sales.values, marker='o', linewidth=2, color='#4ECDC4')
 ax2.fill_between(monthly_sales.index, monthly_sales.values, alpha=0.3, color='#4ECDC4')
-ax2.set_xlabel('月份', fontsize=12)
-ax2.set_ylabel('销售金额 (元)', fontsize=12)
-ax2.set_title('月度销售趋势', fontsize=14, fontweight='bold')
+ax2.set_xlabel('Month', fontsize=12)
+ax2.set_ylabel('Sales Amount', fontsize=12)
+ax2.set_title('Monthly Sales Trend', fontsize=14, fontweight='bold')
 ax2.set_xticks(range(1, 13))
 
 # 3.3 地区销售分布饼图
 ax3 = axes[1, 0]
 region_sales = df.groupby('地区')['销售金额'].sum()
-ax3.pie(region_sales.values, labels=region_sales.index, autopct='%1.1f%%', 
+ax3.pie(region_sales.values, labels=region_sales.index.astype(str), autopct='%1.1f%%', 
         colors=colors, explode=[0.05, 0, 0, 0, 0])
-ax3.set_title('地区销售分布', fontsize=14, fontweight='bold')
+ax3.set_title('Regional Sales Distribution', fontsize=14, fontweight='bold')
 
 # 3.4 季度销售对比
 ax4 = axes[1, 1]
 quarterly_sales = df.groupby('季度')['销售金额'].sum()
 ax4.bar(quarterly_sales.index, quarterly_sales.values, color=['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'])
-ax4.set_xlabel('季度', fontsize=12)
-ax4.set_ylabel('销售金额 (元)', fontsize=12)
-ax4.set_title('季度销售对比', fontsize=14, fontweight='bold')
+ax4.set_xlabel('Quarter', fontsize=12)
+ax4.set_ylabel('Sales Amount', fontsize=12)
+ax4.set_title('Quarterly Sales Comparison', fontsize=14, fontweight='bold')
 ax4.set_xticks([1, 2, 3, 4])
 ax4.set_xticklabels(['Q1', 'Q2', 'Q3', 'Q4'])
 
@@ -265,254 +273,7 @@ plt.tight_layout()
 plt.savefig('sales_analysis_charts.png', dpi=150, bbox_inches='tight')
 plt.close()
 print("图表已保存为 sales_analysis_charts.png")
-```
-</Code>
-
-<Execute>
-```
-图表已保存为 sales_analysis_charts.png
-```
-</Execute>
-
-<Answer>
-## 📊 数据分析报告
-
-### 一、数据概览
-
-本次分析基于模拟的2024年全年销售数据，共 **366** 条记录，包含以下维度：
-- **时间维度**：日期、月份、季度
-- **产品维度**：5大产品类别（电子产品、服装、食品、家居、美妆）
-- **地区维度**：5大区域（华东、华南、华北、西南、西北）
-- **指标维度**：销售金额、销售数量
-
----
-
-### 二、关键发现 📈
-
-#### 1. 产品类别分析
-| 类别 | 总销售额 | 平均销售额 | 销售数量 |
-|------|----------|------------|----------|
-| 🏠 家居 | 213.5万 | 29,235元 | 16,789 |
-| 💻 电子产品 | 189.2万 | 25,890元 | 18,234 |
-| 👔 服装 | 145.7万 | 19,957元 | 18,923 |
-| 💄 美妆 | 123.5万 | 16,912元 | 20,123 |
-| 🍔 食品 | 98.8万 | 13,523元 | 21,456 |
-
-**💡 洞察**：家居类产品销售额最高，但食品类销售数量最多，建议优化高价值品类的销售策略。
-
-#### 2. 地区分布分析
-| 地区 | 总销售额 | 平均销售额 |
-|------|----------|------------|
-| 🌊 华东 | 189.2万 | 25,890元 |
-| 🌴 华南 | 156.8万 | 21,457元 |
-| 🏔️ 西北 | 156.8万 | 21,457元 |
-| 🏛️ 华北 | 134.6万 | 18,423元 |
-| 🌄 西南 | 123.5万 | 16,912元 |
-
-**💡 洞察**：华东地区销售表现最佳，西北地区有较大增长潜力。
-
-#### 3. 时间趋势分析
-- **Q1**（1-3月）：234.6万
-- **Q2**（4-6月）：256.8万
-- **Q3**（7-9月）：223.5万
-- **Q4**（10-12月）：267.9万
-
-**💡 洞察**：Q4销售额最高，可能与年末促销活动相关。
-
----
-
-### 三、可视化分析 📊
-
-![销售分析图表](sales_analysis_charts.png)
-
----
-
-### 四、建议与行动项 ✅
-
-1. **产品策略**
-   - 重点发展家居和电子产品品类
-   - 提升食品类客单价
-
-2. **区域策略**
-   - 加大西北和西南地区的市场开拓力度
-   - 巩固华东地区的市场优势
-
-3. **时间策略**
-   - Q2、Q4旺季加大备货
-   - Q1、Q3开展促销活动
-
-4. **后续分析建议**
-   - 深入分析客户画像
-   - 建立销售预测模型
-   - 分析促销活动效果
-
----
-
-📅 报告生成时间：2024年数据分析报告
-</Answer>"""
-
-
-# 数据分析响应模板（上传数据时使用）
-DATA_ANALYSIS_RESPONSE = """<Analyze>
-根据您提供的数据文件，我将对数据进行全面分析：
-
-1. **数据概览**：数据集包含多个字段，需要进行数据清洗和统计分析
-2. **分析目标**：识别数据模式、趋势和异常值
-3. **方法选择**：使用 Python 进行数据处理和可视化分析
-</Analyze>
-
-<Understand>
-数据理解阶段：
-
-- 数据类型识别：数值型、分类型、时间序列
-- 缺失值检查：统计各字段缺失比例
-- 数据分布：计算均值、中位数、标准差等统计量
-- 相关性分析：特征之间的关联关系
-</Understand>
-
-<Code>
-```python
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# 设置中文字体
-plt.rcParams['font.sans-serif'] = ['SimHei']
-plt.rcParams['axes.unicode_minus'] = False
-
-# 读取数据
-df = pd.read_csv('data.csv')
-
-# 数据概览
-print("数据形状:", df.shape)
-print("\\n数据类型:")
-print(df.dtypes)
-print("\\n统计摘要:")
-print(df.describe())
-
-# 缺失值分析
-missing = df.isnull().sum()
-missing_pct = (missing / len(df)) * 100
-print("\\n缺失值统计:")
-print(pd.DataFrame({'缺失数': missing, '缺失比例': missing_pct}))
-
-# 数据可视化
-fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-
-# 数值列分布
-numeric_cols = df.select_dtypes(include=[np.number]).columns
-if len(numeric_cols) > 0:
-    df[numeric_cols[0]].hist(ax=axes[0, 0], bins=30, edgecolor='black')
-    axes[0, 0].set_title(f'{numeric_cols[0]} 分布')
-    axes[0, 0].set_xlabel(numeric_cols[0])
-    axes[0, 0].set_ylabel('频数')
-
-# 相关性热力图
-if len(numeric_cols) >= 2:
-    corr = df[numeric_cols].corr()
-    sns.heatmap(corr, annot=True, cmap='coolwarm', ax=axes[0, 1])
-    axes[0, 1].set_title('相关性热力图')
-
-# 箱线图
-if len(numeric_cols) > 0:
-    df.boxplot(column=numeric_cols[:4].tolist() if len(numeric_cols) >= 4 else numeric_cols.tolist(), 
-               ax=axes[1, 0])
-    axes[1, 0].set_title('数值列箱线图')
-    axes[1, 0].tick_params(axis='x', rotation=45)
-
-# 时间趋势（如果有时间列）
-time_cols = df.select_dtypes(include=['datetime64']).columns
-if len(time_cols) > 0 and len(numeric_cols) > 0:
-    df.plot(x=time_cols[0], y=numeric_cols[0], ax=axes[1, 1])
-    axes[1, 1].set_title('时间趋势')
-else:
-    axes[1, 1].text(0.5, 0.5, '无时间序列数据', ha='center', va='center')
-    axes[1, 1].set_title('时间趋势分析')
-
-plt.tight_layout()
-plt.savefig('analysis_result.png', dpi=150, bbox_inches='tight')
-plt.show()
-
-print("\\n分析完成！结果图表已保存为 analysis_result.png")
-```
-</Code>
-
-<Execute>
-```
-数据形状: (1000, 8)
-
-数据类型:
-id          int64
-name       object
-value     float64
-category   object
-date       object
-score     float64
-count      int64
-status     object
-
-统计摘要:
-              id        value       score        count
-count  1000.000   1000.00000  1000.00000  1000.000000
-mean    500.500    523.45678    75.23456    156.789000
-std     288.819    298.76543    12.34567     89.012345
-min       1.000     10.12345    45.67890     10.000000
-25%     250.750    280.98765    65.43210    100.000000
-50%     500.500    510.12345    75.00000    150.000000
-75%     750.250    760.54321    85.67890    200.000000
-max    1000.000    999.87654    99.99999    500.000000
-
-缺失值统计:
-          缺失数  缺失比例
-id          0     0.0%
-name       15     1.5%
-value      23     2.3%
-category   10     1.0%
-date        5     0.5%
-score      18     1.8%
-count       0     0.0%
-status      8     0.8%
-
-分析完成！结果图表已保存为 analysis_result.png
-```
-</Execute>
-
-<File>
-- [analysis_result.png](http://localhost:8100/session_id/generated/analysis_result.png)
-![分析结果图表](http://localhost:8100/session_id/generated/analysis_result.png)
-</File>
-
-<Answer>
-## 数据分析总结
-
-根据对您的数据文件进行的全面分析，以下是主要发现：
-
-### 1. 数据质量评估
-- **数据完整性**：整体数据完整性良好，缺失值比例较低（最高2.3%）
-- **数据类型**：包含数值型、分类型和时间型数据
-- **建议**：对缺失值进行适当填充或删除处理
-
-### 2. 统计特征
-- **数值分布**：主要数值字段呈现近似正态分布
-- **相关性**：部分特征之间存在中等程度的相关性
-- **异常值**：箱线图显示存在少量异常值，建议进一步分析
-
-### 3. 可视化结果
-已生成包含以下内容的分析图表：
-- 数值分布直方图
-- 特征相关性热力图
-- 箱线图异常值检测
-- 时间趋势分析
-
-### 4. 后续建议
-1. 处理缺失值和异常值
-2. 进行特征工程和选择
-3. 建立预测模型（如需要）
-4. 深入分析特定业务指标
-
-如需进一步分析特定维度或建立预测模型，请告知具体需求。
-</Answer>"""
+'''
 
 
 # 简单聊天回复
@@ -561,11 +322,16 @@ DEFAULT_RESPONSE = """<Answer>
 
 
 class MockLLMService:
-    """Mock LLM 服务类"""
+    """Mock LLM 服务类 - 支持真实代码执行"""
 
     def __init__(self):
         self.data_keywords = DATA_ANALYSIS_KEYWORDS
         self.full_analysis_keywords = FULL_ANALYSIS_KEYWORDS
+        self.code_executor = CodeExecutor()
+
+    def set_workspace(self, workspace_dir: str):
+        """设置代码执行的工作目录"""
+        self.code_executor.set_workspace(workspace_dir)
 
     def is_full_analysis_request(self, message: str) -> bool:
         """判断是否为完整数据分析流程请求"""
@@ -590,16 +356,42 @@ class MockLLMService:
         if message_lower in SIMPLE_CHAT_RESPONSES:
             return SIMPLE_CHAT_RESPONSES[message_lower]
         
-        # 2. 检查是否为完整数据分析流程
+        # 2. 检查是否为完整数据分析流程 - 返回None，需要流式处理
         if self.is_full_analysis_request(message_lower):
-            return DATA_ANALYSIS_FULL_RESPONSE
+            return None  # 需要流式处理
         
         # 3. 检查是否为数据分析请求（有文件时）
         if self.is_data_analysis_request(message_lower):
-            return DATA_ANALYSIS_RESPONSE
+            return None  # 需要流式处理
         
         # 4. 默认回复
         return DEFAULT_RESPONSE
+
+    def _format_execute_output(self, output: str) -> str:
+        """格式化执行输出"""
+        if not output:
+            return "```\n执行完成，无输出\n```"
+        return f"```\n{output}\n```"
+
+    def _format_file_tags(self, files: List[Dict], session_id: str, user_id: str) -> str:
+        """生成文件标签"""
+        if not files:
+            return ""
+        
+        file_tags = []
+        for f in files:
+            # 构建文件URL路径
+            rel_path = f"{user_id}/{session_id}/generated/{f['name']}"
+            file_url = f"http://localhost:8100/{rel_path}"
+            file_tags.append(f"- [{f['name']}]({file_url})")
+        
+        return "\n".join(file_tags)
+
+    def _ensure_generated_dir(self, workspace_dir: str) -> str:
+        """确保generated目录存在"""
+        generated_dir = os.path.join(workspace_dir, "generated")
+        os.makedirs(generated_dir, exist_ok=True)
+        return generated_dir
 
     def stream_response(
         self, 
@@ -626,18 +418,240 @@ class MockLLMService:
         
         # 获取响应内容
         response = self.get_response(user_content)
-
-        # 模拟流式输出
-        chunk_size = 5  # 每次输出的字符数
-        for i in range(0, len(response), chunk_size):
-            # 检查是否需要停止
+        
+        # 如果是简单回复，直接流式输出
+        if response:
+            chunk_size = 5
+            for i in range(0, len(response), chunk_size):
+                if session_id and stop_manager.is_stopped(session_id):
+                    print(f"[Mock] Session {session_id} stopped")
+                    return
+                chunk = response[i:i + chunk_size]
+                yield chunk
+                time.sleep(0.01)
+            return
+        
+        # 数据分析全流程 - 执行真实代码
+        if self.is_full_analysis_request(user_content):
+            yield from self._stream_full_analysis(session_id)
+            return
+        
+        # 默认回复
+        chunk_size = 5
+        for i in range(0, len(DEFAULT_RESPONSE), chunk_size):
             if session_id and stop_manager.is_stopped(session_id):
-                print(f"[Mock] Session {session_id} stopped")
                 return
-            
-            chunk = response[i:i + chunk_size]
+            chunk = DEFAULT_RESPONSE[i:i + chunk_size]
             yield chunk
-            time.sleep(0.02)  # 模拟网络延迟
+            time.sleep(0.01)
+
+    def _stream_full_analysis(self, session_id: str = None, user_id: str = "default") -> Generator[str, None, None]:
+        """流式输出完整数据分析流程，执行真实代码"""
+        
+        # 检查停止
+        def check_stop():
+            if session_id and stop_manager.is_stopped(session_id):
+                return True
+            return False
+        
+        # 分析部分
+        analyze_text = """<Analyze>
+用户需要生成一份数据分析报告，我将按照以下步骤进行：
+
+1. **数据理解** - 分析数据结构和特征
+2. **数据清洗** - 处理缺失值和异常值
+3. **探索性分析** - 统计描述和可视化
+4. **深度分析** - 发现数据规律和洞察
+5. **报告生成** - 输出专业分析报告
+</Analyze>
+
+"""
+        for chunk in self._chunked_yield(analyze_text, 5):
+            if check_stop(): return
+            yield chunk
+            time.sleep(0.01)
+
+        # 理解部分
+        understand_text = """<Understand>
+由于用户未提供具体数据文件，我将使用模拟数据演示完整的数据分析流程。
+
+我将创建一个销售数据示例，包含：
+- 📅 日期维度（全年数据）
+- 🏷️ 产品类别（5大品类）
+- 💰 销售金额（随机生成）
+- 🗺️ 地区分布（5大区域）
+- 📦 销售数量
+</Understand>
+
+"""
+        for chunk in self._chunked_yield(understand_text, 5):
+            if check_stop(): return
+            yield chunk
+            time.sleep(0.01)
+
+        # 代码块1 - 创建数据
+        code_1_text = f"""<Code>
+```python
+{DATA_ANALYSIS_CODE_1.strip()}
+```
+</Code>
+
+"""
+        for chunk in self._chunked_yield(code_1_text, 5):
+            if check_stop(): return
+            yield chunk
+            time.sleep(0.01)
+
+        # 执行代码1
+        if self.code_executor.workspace_dir:
+            self._ensure_generated_dir(self.code_executor.workspace_dir)
+            success_1, output_1, files_1 = self.code_executor.execute_code(DATA_ANALYSIS_CODE_1)
+        else:
+            success_1, output_1, files_1 = True, "数据创建完成！(模拟输出)", []
+        
+        execute_1_text = f"""<Execute>
+{self._format_execute_output(output_1 if output_1 else "执行成功")}
+</Execute>
+
+"""
+        for chunk in self._chunked_yield(execute_1_text, 5):
+            if check_stop(): return
+            yield chunk
+            time.sleep(0.01)
+
+        # 代码块2 - 统计分析
+        code_2_text = f"""<Code>
+```python
+{DATA_ANALYSIS_CODE_2.strip()}
+```
+</Code>
+
+"""
+        for chunk in self._chunked_yield(code_2_text, 5):
+            if check_stop(): return
+            yield chunk
+            time.sleep(0.01)
+
+        # 执行代码2
+        if self.code_executor.workspace_dir:
+            success_2, output_2, files_2 = self.code_executor.execute_code(DATA_ANALYSIS_CODE_2)
+        else:
+            success_2, output_2, files_2 = True, "统计分析完成！(模拟输出)", []
+        
+        execute_2_text = f"""<Execute>
+{self._format_execute_output(output_2 if output_2 else "统计分析完成")}
+</Execute>
+
+"""
+        for chunk in self._chunked_yield(execute_2_text, 5):
+            if check_stop(): return
+            yield chunk
+            time.sleep(0.01)
+
+        # 代码块3 - 可视化
+        code_3_text = f"""<Code>
+```python
+{DATA_ANALYSIS_CODE_3.strip()}
+```
+</Code>
+
+"""
+        for chunk in self._chunked_yield(code_3_text, 5):
+            if check_stop(): return
+            yield chunk
+            time.sleep(0.01)
+
+        # 执行代码3 - 生成图表
+        if self.code_executor.workspace_dir:
+            success_3, output_3, files_3 = self.code_executor.execute_code(DATA_ANALYSIS_CODE_3)
+        else:
+            success_3, output_3, files_3 = True, "图表已保存！(模拟输出)", []
+        
+        execute_3_text = f"""<Execute>
+{self._format_execute_output(output_3 if output_3 else "图表生成完成")}
+</Execute>
+
+"""
+        for chunk in self._chunked_yield(execute_3_text, 5):
+            if check_stop(): return
+            yield chunk
+            time.sleep(0.01)
+
+        # 文件标签 - 显示生成的文件
+        all_files = files_1 + files_2 + files_3
+        file_tags = self._format_file_tags(all_files, session_id or "default", user_id)
+        
+        if file_tags:
+            file_text = f"""<File>
+{file_tags}
+</File>
+
+"""
+            for chunk in self._chunked_yield(file_text, 5):
+                if check_stop(): return
+                yield chunk
+                time.sleep(0.01)
+
+        # 最终答案
+        answer_text = """<Answer>
+## 📊 数据分析报告
+
+### 一、数据概览
+
+本次分析基于模拟的2024年全年销售数据，共 **366** 条记录，包含以下维度：
+- **时间维度**：日期、月份、季度
+- **产品维度**：5大产品类别（电子产品、服装、食品、家居、美妆）
+- **地区维度**：5大区域（华东、华南、华北、西南、西北）
+- **指标维度**：销售金额、销售数量
+
+---
+
+### 二、关键发现 📈
+
+#### 1. 产品类别分析
+根据实际执行结果，各产品类别的销售表现各有特点，建议优化高价值品类的销售策略。
+
+#### 2. 地区分布分析
+不同地区的销售表现存在差异，建议加大潜力地区的市场开拓力度。
+
+#### 3. 时间趋势分析
+各季度销售额呈现一定波动，可根据季节性特征制定营销策略。
+
+---
+
+### 三、可视化分析 📊
+
+已生成包含以下内容的分析图表：
+- 各产品类别销售金额柱状图
+- 月度销售趋势图
+- 地区销售分布饼图
+- 季度销售对比图
+
+请查看上方生成的图表文件。
+
+---
+
+### 四、建议与行动项 ✅
+
+1. **产品策略**：重点发展高销售额品类
+2. **区域策略**：加强潜力区域的市场开拓
+3. **时间策略**：根据季节性波动调整备货和促销
+4. **后续分析**：可进一步分析客户画像和建立预测模型
+
+---
+
+📅 报告生成时间：2024年数据分析报告
+</Answer>"""
+        
+        for chunk in self._chunked_yield(answer_text, 5):
+            if check_stop(): return
+            yield chunk
+            time.sleep(0.01)
+
+    def _chunked_yield(self, text: str, chunk_size: int) -> Generator[str, None, None]:
+        """分块生成文本"""
+        for i in range(0, len(text), chunk_size):
+            yield text[i:i + chunk_size]
 
     def stream_response_with_session(
         self, 

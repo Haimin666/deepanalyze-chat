@@ -111,3 +111,25 @@ class WorkspaceFileModel(Base):
             "isGenerated": self.is_generated,
             "createdAt": self.created_at.isoformat() + "Z" if self.created_at else None,
         }
+
+
+class TokenBlacklistModel(Base):
+    """Token黑名单表 - 存储已失效的token"""
+    __tablename__ = "token_blacklist"
+
+    id = Column(String(36), primary_key=True)
+    token = Column(String(500), unique=True, nullable=False, index=True)
+    user_id = Column(String(36), nullable=False, index=True)
+    reason = Column(String(50), default="logout")  # logout, timeout, etc.
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)  # token过期时间，用于清理
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "token": self.token[:20] + "...",  # 只显示前20个字符
+            "userId": self.user_id,
+            "reason": self.reason,
+            "createdAt": self.created_at.isoformat() + "Z" if self.created_at else None,
+            "expiresAt": self.expires_at.isoformat() + "Z" if self.expires_at else None,
+        }
