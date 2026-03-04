@@ -41,7 +41,7 @@ class ChatController:
             
             def generate_mock():
                 for delta_content in self.mock_service.stream_response(
-                    messages, stream_session_id
+                    messages, stream_session_id, user_id
                 ):
                     # 替换 mock 响应中的 session_id 和 localhost:8100
                     processed_content = self._process_mock_content(delta_content, session_id, user_id)

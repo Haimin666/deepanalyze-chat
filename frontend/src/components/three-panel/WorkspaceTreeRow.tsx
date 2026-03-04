@@ -52,7 +52,6 @@ export const WorkspaceTreeRow = ({
   const handleDeleteConfirm = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    console.log("[WorkspaceTreeRow] Deleting:", data.id, "isDir:", isDir);
     if (onDeleteFile) {
       onDeleteFile(data.id, isDir);
     }
@@ -62,12 +61,8 @@ export const WorkspaceTreeRow = ({
   const handleDownload = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    const url = data.download_url || "";
-    console.log("[WorkspaceTreeRow] Download clicked:", data.name, "url:", url);
-    if (url) {
-      onDownloadFile(data.name, url);
-    } else {
-      console.warn("[WorkspaceTreeRow] No download URL for file:", data.name);
+    if (data.download_url) {
+      onDownloadFile(data.name, data.download_url);
     }
   };
 

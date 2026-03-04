@@ -143,9 +143,9 @@ export function UserAvatar({ onOpenAdmin }: UserAvatarProps) {
             variant="ghost"
             size="sm"
             className="w-full justify-start text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950"
-            onClick={() => {
+            onClick={async () => {
               setIsOpen(false);
-              logout();
+              await logout();
             }}
           >
             <LogOut className="h-4 w-4 mr-2" />

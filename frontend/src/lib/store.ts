@@ -47,7 +47,7 @@ interface AuthState {
   timedOut: boolean; // 是否因超时而登出
   requestAdminPage: boolean; // 请求打开管理员页面
   login: (user: User, token: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   checkTimeout: () => boolean;
   updateActivity: () => void;
   setSessionTimeout: (minutes: number) => void;
@@ -145,7 +145,17 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     });
   },
 
-  logout: () => {
+  logout: async () => {
+    // 调用后端logout API将token加入黑名单
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout API error:', error);
+    }
+    
     clearLastActivityFromStorage();
     set({
       isAuthenticated: false,

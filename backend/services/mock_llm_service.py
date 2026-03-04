@@ -396,7 +396,8 @@ class MockLLMService:
     def stream_response(
         self, 
         messages: list, 
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        user_id: str = "default"
     ) -> Generator[str, None, None]:
         """
         流式生成响应
@@ -404,6 +405,7 @@ class MockLLMService:
         Args:
             messages: 消息列表
             session_id: 可选的会话ID，用于支持停止功能
+            user_id: 用户ID，用于文件路径生成
         
         Returns:
             生成器，每次返回一个字符串片段
@@ -433,7 +435,7 @@ class MockLLMService:
         
         # 数据分析全流程 - 执行真实代码
         if self.is_full_analysis_request(user_content):
-            yield from self._stream_full_analysis(session_id)
+            yield from self._stream_full_analysis(session_id, user_id)
             return
         
         # 默认回复
@@ -655,7 +657,8 @@ class MockLLMService:
 
     def stream_response_with_session(
         self, 
-        messages: list
+        messages: list,
+        user_id: str = "default"
     ) -> tuple:
         """
         创建可停止的流式响应
@@ -667,7 +670,7 @@ class MockLLMService:
         
         def generate():
             try:
-                for chunk in self.stream_response(messages, session_id):
+                for chunk in self.stream_response(messages, session_id, user_id):
                     yield chunk
             finally:
                 stop_manager.cleanup_session(session_id)
