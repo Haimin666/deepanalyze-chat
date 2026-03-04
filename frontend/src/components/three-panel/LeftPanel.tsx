@@ -113,7 +113,9 @@ export function LeftPanel({
   const bottomHeight = (1 - splitRatio) * 100;
 
   // 计算文件树的实际可用高度
-  const treeHeight = treeSize.h ? treeSize.h * splitRatio - 120 : 200;
+  // treeSize.h 是外层容器的高度，需要减去上传区域(64px)、上传消息(24px)、内边距等
+  // 确保最小高度为 100px，最大高度足够显示所有文件
+  const treeHeight = Math.max(100, treeSize.h > 0 ? treeSize.h - 90 : 200);
 
   return (
     <div ref={containerRef} className="flex flex-col min-h-0 min-w-0 h-full">
@@ -171,11 +173,11 @@ export function LeftPanel({
 
         <div
           ref={treeContainerRef}
-          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pl-3 pr-1 py-2"
+          className="flex-1 min-h-0 flex flex-col pl-3 pr-1 py-2"
         >
           {/* 上传区域 */}
           <div
-            className={`mb-2 rounded border border-dashed flex items-center justify-center h-16 text-xs select-none cursor-pointer transition-colors ${
+            className={`mb-2 rounded border border-dashed flex items-center justify-center h-16 text-xs select-none cursor-pointer transition-colors shrink-0 ${
               dropActive
                 ? "bg-blue-50 border-blue-300 text-blue-600"
                 : "bg-gray-50 dark:bg-gray-900/40 border-gray-300 dark:border-gray-700 text-gray-500"
@@ -200,22 +202,22 @@ export function LeftPanel({
           </div>
 
           {uploadMsg && (
-            <div className="px-2 pb-2 text-[11px] text-gray-500">
+            <div className="px-2 pb-2 text-[11px] text-gray-500 shrink-0">
               {uploadMsg}
             </div>
           )}
 
-          {/* 文件树 */}
+          {/* 文件树 - 使用 flex-1 填充剩余空间，内部滚动 */}
           {workspaceTree ? (
-            <div ref={treeContentRef} className="overflow-visible">
+            <div ref={treeContentRef} className="flex-1 min-h-0 overflow-auto">
               <Tree
-                width={treeSize.w || 300}
+                width={treeSize.w - 16 || 280}
                 height={treeHeight}
                 data={toArbor(workspaceTree).children || []}
                 openByDefault
                 indent={14}
                 rowHeight={28}
-                overscan={5}
+                overscan={10}
               >
                 {(props) => (
                   <WorkspaceTreeRow
@@ -231,7 +233,7 @@ export function LeftPanel({
               </Tree>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-full text-sm text-gray-500">
+            <div className="flex items-center justify-center flex-1 text-sm text-gray-500">
               Loading...
             </div>
           )}
